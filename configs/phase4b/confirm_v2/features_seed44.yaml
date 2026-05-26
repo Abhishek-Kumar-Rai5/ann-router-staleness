@@ -1,0 +1,26 @@
+# Phase 4b confirmation v2 — frozen Phase 3 features (identical probe
+# definitions; query file = confirmation v2). Index seed 44.
+experiment_name: phase4b_confirm_v2_features_seed44
+dataset:
+  base: data/sift/sift_base.fvecs
+  queries: data/confirm/sift_learn_confirm_v2_seed20261007_n2000.fvecs
+  max_base: 0
+  max_queries: 0
+index:
+  m: 16
+  ef_construction: 200
+  seed: 44
+  build_threads: 1
+ground_truth:
+  k: 100
+paths:
+  cache_dir: data/cache
+  output_dir: results
+split:
+  path: splits/confirmation_v2_sift_learn_seed20261007_n2000_tagging.csv
+features:
+  probe_k: 10
+  probe_ef: 10
+  lid_k: 20
+  lid_ef: 20
+  threads: 16

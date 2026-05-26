@@ -1,0 +1,54 @@
+# Phase 4b — router TRAINING and FREEZING only (no evaluation set touched).
+# Frozen contract: docs/phase4_redesign.md as amended by docs/phase4_bias_audit.md
+# §10, plus the user's Phase 4b gap resolutions (2026-10-02).
+experiment_name: phase4b_router_train
+
+seeds:   # valid inputs only (the aborted sed-bug runs in results/_invalid/ are excluded)
+  42: {oracle_run: results/8e605bfc5769_20261001T201040Z, features_run: results/657980fb7c23_20261002T144828Z}
+  43: {oracle_run: results/e795d8b6d6df_20261002T133032Z, features_run: results/94945b3661cb_20261002T144831Z}
+  44: {oracle_run: results/3e2faa1921f8_20261002T133032Z, features_run: results/1c816578a946_20261002T144834Z}
+
+target_recall: 0.95     # per-query success <=> tie-aware recall@10 == 1.0 (k = 10)
+candidates: [probe, 20, 40, 83, 164, 327, 647, 1343, 2661]   # frozen ladder
+fallback_candidate: 2661                                     # gap resolution 1
+
+per_query_levels: [0.90, 0.95, 0.99]     # primary (gate) family, co-primary
+mean_recall_levels: [0.95, 0.97, 0.99]   # secondary family ("identical procedure")
+
+variants:
+  primary:
+    features: [knn_dist, centroid_dist, score_concentration]
+    probe_ef: 10
+    probe_cost: probe_distance_computations
+  lid_ablation:             # gap resolution 6: only the ef=20 probe is charged
+    features: [knn_dist_lid_probe, centroid_dist, score_concentration_lid_probe, lid]
+    probe_ef: 20
+    probe_cost: lid_probe_distance_computations
+  single_feature:           # gap resolution 7: (feature, family) chosen by OOF cost
+    candidates: [knn_dist, centroid_dist, score_concentration]
+    probe_ef: 10
+    probe_cost: probe_distance_computations
+
+families:
+  random_state: 20261002
+  LR:  {C: 1.0, solver: lbfgs, max_iter: 2000}     # with StandardScaler
+  DT2: {max_depth: 2, min_samples_leaf: 100, criterion: gini}
+  DT3: {max_depth: 3, min_samples_leaf: 100, criterion: gini}
+  DT4: {max_depth: 4, min_samples_leaf: 100, criterion: gini}
+simplicity_order: [DT2, DT3, LR, DT4]
+tie_tolerance_relative: 0.01
+probability_calibration: none            # monotonicity: cumulative max over candidates
+
+cv:
+  folds: 5
+  shuffle: true
+  seed: 20261002
+  stratify: primary_candidate_oracle_index   # beyond-last = its own class; same folds for all variants
+tau_grid_step: 0.001                         # smallest tau with OOF quality >= target
+
+b1:
+  hash: splitmix64(fnv1a64("<query_set_id>:<row>") XOR seed) / 2^64 < w_hi -> ef_hi
+  seed: 20261006
+  train_query_set_id: sift_query
+
+output_dir: results

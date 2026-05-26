@@ -1,0 +1,22 @@
+# Phase 5'(a) synthetic validation (pre-declared in docs/notes.md, 2026-10-02).
+# Constructions identical to design_doc.md Addendum A1.4; only the data differ.
+experiment_name: phase5_synthetic_validation
+data:
+  kind: synthetic
+  seed: 20261011
+  dim: 32
+  components: 20
+  mean_scale: 10.0
+  n_base: 50000
+  n_pool: 100000
+  n_queries: 1000
+  out_dir: data/phase5/synthetic
+index: {m: 16, ef_construction: 200, seeds: [42]}
+counts_fraction: [0.01, 0.02, 0.04, 0.08]     # of N0 (insertion)
+delete_fraction: [0.02, 0.08]                  # of N0 (lazy deletion)
+seeds: {id_order: 20261008, deletion: 20261009, ood_anchor: 20261010}
+oracle: {k: 10, gt_k: 100, target_recall: 0.95, ef_grid: {min: 10, max: 4096, ratio: 1.05}, threads: 16}
+features: {probe_k: 10, probe_ef: 10, lid_k: 20, lid_ef: 20, threads: 16}
+state_root: data/phase5/synthetic/states
+cache_dir: data/phase5/synthetic/cache
+output_dir: results

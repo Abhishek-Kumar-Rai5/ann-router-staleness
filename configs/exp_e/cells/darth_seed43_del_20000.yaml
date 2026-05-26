@@ -1,0 +1,13 @@
+# Experiment E cell: frozen DARTH seed 43 on state del_20000 (design freeze v2 §3).
+experiment_name: exp_e_darth_seed43_del_20000
+index_path: data/phase5/sift/states/seed43/del/del_20000.bin
+queries: data/sift/sift_query.fvecs
+split_path: splits/sift1m_query_split_seed20261001.csv
+gt_prefix: data/cache/gt_state_del_20000_seed43_986cbd55fd9e5659
+k: 10
+ef_cap: 142
+verify_efs: [142]   # unused in eval mode
+trace_dir: data/exp_e/unused     # unused in eval mode
+policy_path: derived/exp_e/darth_policy_s0_seed43.json
+output_dir: results
+threads: 1

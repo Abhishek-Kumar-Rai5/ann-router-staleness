@@ -1,0 +1,38 @@
+# Experiment E plan (docs/exp_e_design_freeze_v2.md; binding only after final approval).
+# Every input is an existing frozen artifact. Nothing here is tuned.
+experiment_name: experiment_e
+design_doc: docs/exp_e_design_freeze_v2.md
+seeds: [42, 43, 44]
+states: [id_10000, id_20000, id_40000, id_80000, ood_10000, ood_20000, ood_40000, ood_80000,
+         del_20000, del_80000]
+insertion_states: [id_10000, id_20000, id_40000, id_80000, ood_10000, ood_20000, ood_40000, ood_80000]
+deletion_states: [del_20000, del_80000]
+n0: 1000000
+manifest: data/phase5/sift/states/run_manifest.json          # A1 states (unchanged)
+queries: data/sift/sift_query.fvecs
+split_path: splits/sift1m_query_split_seed20261001.csv     # evaluation = split == test
+s0_gt_prefix: data/cache/gt_S0_01564caeeb173bc1
+b1_spec: results/phase4b_train_311634ee3011_20261002T145649Z/routers/{seed}/primary/mean_recall_0.95.json
+b1_s0_rows: results/phase4b_eval_old_test_second_look_20261002T175740Z/per_query_rows.csv
+phase5_analysis: results/phase5b_analysis_20261004T230023Z   # H-E3 predictors (reused, not recomputed)
+s0:
+  42:
+    oracle_run: results/8e605bfc5769_20261001T201040Z
+    index: data/cache/hnsw_S0_c86ffb2a63e7325b.bin
+    darth_policy: derived/exp_c/darth_policy_s0.json
+    darth_policy_sha256: bcbe2720044b51edff1b493b956e413958f8503a6a76bfe86f52317cec8ac75d
+    darth_s0_reference_run: results/b089d7599961_20261004T211319Z
+  43:
+    oracle_run: results/e795d8b6d6df_20261002T133032Z
+    index: data/cache/hnsw_S0_449780e7eaf4f5c0.bin
+    darth_policy: derived/exp_e/darth_policy_s0_seed43.json
+    darth_policy_sha256: 6b2275eff8fa732e3d4a3df90f777817f6e0a13a0fef830861fbac0d0449ac4a
+    darth_s0_reference_run: results/7c10f1776381_20261005T075033Z
+  44:
+    oracle_run: results/3e2faa1921f8_20261002T133032Z
+    index: data/cache/hnsw_S0_cc3c7fb3ab27c6b5.bin
+    darth_policy: derived/exp_e/darth_policy_s0_seed44.json
+    darth_policy_sha256: df0bd726ba379ccebacc73b977ae1dcefe602f47a37da00736bed9ccc6513740
+    darth_s0_reference_run: results/c18ba78bb1e3_20261005T075041Z
+cell_config_dir: configs/exp_e/cells
+output_dir: results

@@ -1,0 +1,28 @@
+# Phase 1 — static S0 baseline on full SIFT1M (design doc §21, §22).
+# Fixed-efSearch sweep over all 10K SIFT queries, single-threaded timing.
+experiment_name: phase1_sift1m_static
+
+dataset:
+  base: data/sift/sift_base.fvecs
+  queries: data/sift/sift_query.fvecs
+  max_base: 0        # 0 = all 1,000,000
+  max_queries: 0     # 0 = all 10,000 (file order; no sampling yet)
+
+index:
+  m: 16
+  ef_construction: 200
+  seed: 42           # hnswlib level-assignment RNG
+  build_threads: 1   # single-threaded => bit-reproducible graph for this seed
+
+ground_truth:
+  k: 100             # same depth as the official sift_groundtruth.ivecs
+
+search:
+  k: 10              # recall@10
+  ef_values: [10, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 320, 384, 512, 768, 1024]
+  timing_repeats: 3  # median latency reported (design doc §13)
+  warmup_queries: 200
+
+paths:
+  cache_dir: data/cache
+  output_dir: results

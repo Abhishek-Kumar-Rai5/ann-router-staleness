@@ -1,0 +1,36 @@
+# Phase 3 — live routing features on the static S0 SIFT1M index (design doc
+# §9, §21). dataset/index/ground_truth/paths are identical to Phases 1-2, so
+# the cached S0 index is reused. No ground truth or oracle label is read.
+experiment_name: phase4b_features_sift1m_seed43
+
+dataset:
+  base: data/sift/sift_base.fvecs
+  queries: data/sift/sift_query.fvecs
+  max_base: 0
+  max_queries: 0
+
+index:
+  m: 16
+  ef_construction: 200
+  seed: 43           # Phase 4b index seed (the only change vs seed 42)
+  build_threads: 1
+
+ground_truth:
+  k: 100
+
+paths:
+  cache_dir: data/cache
+  output_dir: results
+
+split:
+  path: splits/sift1m_query_split_seed20261001.csv   # row tagging only
+
+features:
+  # Core probe: the cheapest search hnswlib allows at k=10 (it uses
+  # max(ef, k), so ef < 10 is identical to ef = 10). Fixed by design, not tuned.
+  probe_k: 10
+  probe_ef: 10
+  # LID ablation (§9: "second-tier, more expensive"): a separate, deeper probe.
+  lid_k: 20
+  lid_ef: 20
+  threads: 16

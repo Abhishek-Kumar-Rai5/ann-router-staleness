@@ -1,0 +1,77 @@
+{
+ "frozen": "design_doc.md Addendum C1 / C1.9; immutable before evaluation",
+ "created_utc": "2026-10-05T07:44:55+00:00",
+ "model_path": "derived/exp_e/darth_lgbm_s0_seed44.txt",
+ "model_sha256": "21a27a771a6de11b2ce6c971be12b022f62b515ba1eea3285a9cea73c572d17d",
+ "feature_order": [
+  "step",
+  "dists",
+  "inserts",
+  "first_nn_dist",
+  "nn_dist",
+  "furthest_dist",
+  "avg_dist",
+  "variance",
+  "percentile_25",
+  "percentile_50",
+  "percentile_75"
+ ],
+ "k": 10,
+ "ef_cap": 135,
+ "target_recall": 0.95,
+ "ipi": 363,
+ "mpi": 72,
+ "dists_Rt": 727.3753223836026,
+ "interval_rule": "ipi = int(dists_Rt/2), mpi = int(dists_Rt/10); pi = int(mpi + (ipi - mpi)*(Rt - Rp))",
+ "lightgbm_version": "4.6.0",
+ "lightgbm_params": {
+  "boosting_type": "gbdt",
+  "class_weight": null,
+  "colsample_bytree": 1.0,
+  "importance_type": "split",
+  "learning_rate": 0.1,
+  "max_depth": -1,
+  "min_child_samples": 20,
+  "min_child_weight": 0.001,
+  "min_split_gain": 0.0,
+  "n_estimators": 100,
+  "n_jobs": null,
+  "num_leaves": 31,
+  "objective": "regression",
+  "random_state": 42,
+  "reg_alpha": 0.0,
+  "reg_lambda": 0.0,
+  "subsample": 1.0,
+  "subsample_for_bin": 200000,
+  "subsample_freq": 0,
+  "verbose": -1
+ },
+ "seeds": {
+  "lightgbm_random_state": 42,
+  "bootstrap": 20261002,
+  "b1_hash_seed": 20261006
+ },
+ "training": {
+  "split_path": "splits/sift1m_query_split_seed20261001.csv",
+  "split_sha256": "e0e3c6faaa56f98367cab0f9baedfb6c8a9ab788543538221d546f0aa8b03802",
+  "split_value": "train",
+  "query_ids_sha256": "7986fe84286449ac65d13df5f5ddc07108aa3cf8c317f4ab954f3866b33ac72c",
+  "trace_run": "results/240fb1b418d4_20261005T074354Z",
+  "trace_sha256": "f4d97c3c4a5be639ff6ba845016e850eb8f6b067ab62249a53c9f6cee1122615",
+  "observations": 16985782,
+  "train_seconds": 23.035401,
+  "refit_identical_model": false
+ },
+ "index": {
+  "path": "data/cache/hnsw_S0_cc3c7fb3ab27c6b5.bin",
+  "sha256": "3d0b74bb3d22e30b10413027cef86811d0be7fa9db30da7d53717a2ef4ff241a"
+ },
+ "ground_truth": {
+  "prefix": "data/cache/gt_S0_01564caeeb173bc1",
+  "ivecs_sha256": "126d28befcf0dcdb2d71ecfaca89202b196eba5c63704ecb1cbb7be295886ca7"
+ },
+ "queries": {
+  "path": "data/sift/sift_query.fvecs",
+  "sha256": "f7fc9be140accdfd64116c2fa2365ecdb69b8f084970c6b0532db5ff79ac8fdc"
+ }
+}

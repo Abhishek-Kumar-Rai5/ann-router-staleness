@@ -1,0 +1,83 @@
+{
+  "source_oracle_run": "8e605bfc5769_20261001T201040Z",
+  "fitted_on": "train split only",
+  "train_rows_sha256": "598e4f3ed43af43bbe638326828cba91ed5e1bb0b1132babc7eb8cb33c79eb58",
+  "rules": {
+    "tier_quantiles": {
+      "low": 0.3333333333333333,
+      "med": 0.6666666666666666,
+      "high": 0.99
+    },
+    "tertile_quantiles": {
+      "T1": 0.3333333333333333,
+      "T2": 0.6666666666666666
+    },
+    "quantile_definition": "smallest grid ef with train CDF >= p",
+    "ties": "<= threshold goes to the lower tier/group",
+    "censored": "tier 'high' (fails), difficulty 'hard'"
+  },
+  "fixed_ef_baselines": {
+    "low": 18,
+    "med": 48,
+    "high": 327
+  },
+  "tertile_thresholds": {
+    "T1": 18,
+    "T2": 48
+  },
+  "train_floor_share_at_ef10": 0.17325,
+  "baselines_on_train_split": {
+    "low": {
+      "ef": 18,
+      "mean_recall_tie_aware": 0.8225125000000001,
+      "frac_queries_below_target": 0.66575,
+      "mean_distance_computations": 531.650125
+    },
+    "med": {
+      "ef": 48,
+      "mean_recall_tie_aware": 0.944725,
+      "frac_queries_below_target": 0.323125,
+      "mean_distance_computations": 1007.447875
+    },
+    "high": {
+      "ef": 327,
+      "mean_recall_tie_aware": 0.999025,
+      "frac_queries_below_target": 0.009,
+      "mean_distance_computations": 4593.154375
+    }
+  },
+  "counts": {
+    "train": {
+      "tier_label": {
+        "low": 2674,
+        "med": 2741,
+        "high": 2585
+      },
+      "difficulty": {
+        "easy": 2674,
+        "medium": 2741,
+        "hard": 2585
+      },
+      "exceeds_high_tier": 72,
+      "censored": 0
+    },
+    "test": {
+      "tier_label": {
+        "low": 683,
+        "med": 641,
+        "high": 676
+      },
+      "difficulty": {
+        "easy": 683,
+        "medium": 641,
+        "hard": 676
+      },
+      "exceeds_high_tier": 18,
+      "censored": 2
+    }
+  },
+  "censored_query_ids": [
+    4659,
+    8318
+  ]
+}

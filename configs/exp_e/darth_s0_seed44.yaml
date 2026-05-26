@@ -1,0 +1,25 @@
+# Experiment E, S0 DARTH replication, index seed 44. Frozen C1 procedure (design_doc.md C1.3/C1.9),
+# Option A (user, 2026-10-05): the frozen rules re-applied to this seed's own S0 index and
+# training traces. Search cap = smallest grid ef with train mean recall@10 (id) >= 0.99 on this
+# seed's S0 oracle curves (results/3e2faa1921f8_20261002T133032Z) = ef 135. ipi/mpi from this seed's traces (published heuristic).
+# Identical to configs/exp_c/darth_s0.yaml otherwise: queries, split, GT, k, LightGBM settings.
+experiment_name: exp_e_darth_s0_seed44
+index_path: data/cache/hnsw_S0_cc3c7fb3ab27c6b5.bin   # S0 seed 44 (sha256 3d0b74bb3d22e30b...)
+queries: data/sift/sift_query.fvecs
+split_path: splits/sift1m_query_split_seed20261001.csv
+gt_prefix: data/cache/gt_S0_01564caeeb173bc1   # S0 GT, index-seed independent
+k: 10
+ef_cap: 135
+verify_efs: [10, 50, 53, 135]
+trace_dir: data/exp_e/darth_s0_seed44
+policy_path: derived/exp_e/darth_policy_s0_seed44.json
+model_out: derived/exp_e/darth_lgbm_s0_seed44.txt
+expected_index_sha256_prefix: "3d0b74bb3d22e30b"
+index_seed: 44
+s0_oracle_run: results/3e2faa1921f8_20261002T133032Z
+eval_report_prefix: exp_e_darth_s0_seed44_eval
+output_dir: results
+threads: 16
+# Frozen after training, before evaluation (2026-10-05):
+expected_policy_sha256: "df0bd726ba379ccebacc73b977ae1dcefe602f47a37da00736bed9ccc6513740"
+expected_model_sha256: "21a27a771a6de11b2ce6c971be12b022f62b515ba1eea3285a9cea73c572d17d"

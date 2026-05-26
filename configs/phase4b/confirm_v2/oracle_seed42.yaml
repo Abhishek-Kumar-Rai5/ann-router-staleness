@@ -1,0 +1,31 @@
+# Phase 4b confirmation v2 — oracle curves (identical to the frozen Phase 2 /
+# Phase 4b oracle runs except: query file = confirmation v2, fixed all-"test"
+# tagging, experiment name). Index seed 42 (cached index reused).
+experiment_name: phase4b_confirm_v2_oracle_seed42
+dataset:
+  base: data/sift/sift_base.fvecs
+  queries: data/confirm/sift_learn_confirm_v2_seed20261007_n2000.fvecs
+  max_base: 0
+  max_queries: 0
+index:
+  m: 16
+  ef_construction: 200
+  seed: 42
+  build_threads: 1
+ground_truth:
+  k: 100
+paths:
+  cache_dir: data/cache
+  output_dir: results
+split:
+  path: splits/confirmation_v2_sift_learn_seed20261007_n2000_tagging.csv
+  fixed_file: true
+oracle:
+  k: 10
+  target_recall: 0.95
+  recall_definition: tie_aware
+  ef_grid:
+    min: 10
+    max: 4096
+    ratio: 1.05
+  search_threads: 16

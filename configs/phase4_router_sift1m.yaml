@@ -1,0 +1,27 @@
+# Phase 4 — initial per-query search-effort router on the static S0 SIFT1M
+# index (design doc §9, §12, §14, §21). Rules pre-registered in docs/notes.md
+# ("Phase 4 — PRE-REGISTRATION") before any fitting or test evaluation.
+experiment_name: phase4_router_sift1m
+
+inputs:
+  features_run: results/657980fb7c23_20261002T050617Z   # Phase 3 canonical
+  oracle_run: results/8e605bfc5769_20261001T201040Z     # Phase 2 canonical
+  tiers: derived/sift1m_s0_effort_tiers.json            # frozen 18/48/327
+  strata: derived/sift1m_s0_query_strata.csv            # tier labels, groups
+
+target_recall: 0.95          # tie-aware recall@10 (Phase 2)
+
+router:
+  features: [knn_dist, centroid_dist, score_concentration]
+  ablation_feature: lid      # LID ablation only (§9)
+  candidates: [DT2, DT3, LR, DT4]
+  single_feature_candidates: [knn_dist, centroid_dist, score_concentration]
+  seed: 20261002
+  cv_folds: 5
+  tie_tolerance: 0.02
+
+evaluation:
+  bootstrap_resamples: 2000
+  bootstrap_seed: 20261002
+
+output_dir: results

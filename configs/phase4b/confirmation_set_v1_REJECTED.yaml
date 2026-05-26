@@ -1,0 +1,15 @@
+# REJECTED (2026-10-02): integrity failure, never evaluated. Kept as historical record.
+# See splits/_invalid/README.md. Superseded by confirmation_set_v2.yaml.
+# Phase 4b confirmation query set — created ONLY after the routers were frozen
+# (results/phase4b_train_311634ee3011_20261002T145649Z). Used exactly once for
+# the primary evaluation. Definition is permanent; never regenerate with other
+# parameters.
+experiment_name: phase4b_confirmation_set
+source: data/sift/sift_learn.fvecs        # SIFT1M learn set (100,000 x 128)
+n_select: 2000
+seed: 20261005
+query_set_id: sift_learn_confirm_seed20261005
+output_fvecs: data/confirm/sift_learn_confirm_seed20261005_n2000.fvecs
+output_ids: splits/confirmation_sift_learn_seed20261005_n2000_ids.csv        # tracked
+output_tagging: splits/confirmation_sift_learn_seed20261005_n2000_tagging.csv # all "test"
+output_dir: results

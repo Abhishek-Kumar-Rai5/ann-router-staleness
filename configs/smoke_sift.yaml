@@ -1,0 +1,28 @@
+# Smoke test (design doc §20): whole Phase 1 pipeline on a SIFT subsample, < 1 min.
+# Run after every code change.
+experiment_name: smoke_sift_static
+
+dataset:
+  base: data/sift/sift_base.fvecs
+  queries: data/sift/sift_query.fvecs
+  max_base: 20000
+  max_queries: 200
+
+index:
+  m: 16
+  ef_construction: 200
+  seed: 42           # hnswlib level-assignment RNG
+  build_threads: 1   # single-threaded => bit-reproducible graph for this seed
+
+ground_truth:
+  k: 100             # same depth as the official sift_groundtruth.ivecs
+
+search:
+  k: 10              # recall@10
+  ef_values: [10, 20, 40, 80, 160, 320]
+  timing_repeats: 3  # median latency reported (design doc §13)
+  warmup_queries: 20
+
+paths:
+  cache_dir: data/cache
+  output_dir: results
