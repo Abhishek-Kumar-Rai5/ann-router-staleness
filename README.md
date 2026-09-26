@@ -233,9 +233,9 @@ DARTH, REF is a freshly calibrated *simple* policy, not a recalibrated DARTH.
 **H-E1, cost drift.** The cost ratio to the reference is anchored at S0. This keeps a policy's
 known S0 inefficiency (C1) out of the staleness estimate:
 
-$$
-D(P,\sigma,s) \;=\; \frac{\bar C_P(\sigma,s)\,/\,\bar C_{\mathrm{REF}}(\sigma,s)}{\bar C_P(\sigma,S_0)\,/\,\bar C_{\mathrm{REF}}(\sigma,S_0)} \;-\; 1
-$$
+```math
+D(P,\sigma,s) = \frac{\bar{C}_P(\sigma,s) / \bar{C}_{\mathrm{REF}}(\sigma,s)}{\bar{C}_P(\sigma,S_0) / \bar{C}_{\mathrm{REF}}(\sigma,S_0)} - 1
+```
 
 Here C̄ is the mean distance computations per query over the 2,000 test queries.
 - **Margin:** ±0.10.
@@ -246,10 +246,13 @@ Here C̄ is the mean distance computations per query over the 2,000 test queries
 **H-E2, recall-contract drift.** This is the excess rate at which queries that passed the
 10/10 contract at S0 newly fail at state s, relative to the reference:
 
-$$
-E(P,\sigma,s) \;=\; \mathrm{NF}(P,\sigma,s) - \mathrm{NF}(\mathrm{REF},\sigma,s),\qquad
-\mathrm{NF}(P,\sigma,s) = \frac{\#\{q \in K_P(\sigma) : \text{fail}_P(\sigma,s,q)\}}{|K_P(\sigma)|}
-$$
+```math
+E(P,\sigma,s) = \mathrm{NF}(P,\sigma,s) - \mathrm{NF}(\mathrm{REF},\sigma,s)
+```
+
+```math
+\mathrm{NF}(P,\sigma,s) = \frac{\left|\left\lbrace q \in K_P(\sigma) : q \text{ fails the contract under } P \text{ at state } s \right\rbrace\right|}{\left|K_P(\sigma)\right|}
+```
 
 K_P(σ) is policy P's S0 pass cohort. The margin is ±0.05 (5 percentage points), with the same
 three-valued rule.
