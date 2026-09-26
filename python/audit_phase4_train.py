@@ -1,18 +1,5 @@
-"""Methodology audit diagnostics for Phase 4 — TRAINING SPLIT ONLY.
-
-Read-only analysis supporting docs/methodology_audit.md. Uses only:
-  * train-split oracle curves (Phase 2 canonical run),
-  * train-split features (Phase 3 canonical run),
-  * the frozen tiers / strata (derived/),
-  * out-of-fold (OOF) predictions saved by the Phase 4 training run.
-No model is fitted, no test-split row is read (asserted), nothing canonical is
-modified. Output: results/audit_phase4_<ts>/audit_train.json.
-
-Omniscient allocations use a Lagrangian relaxation: for multiplier lam, every
-query independently picks the option minimising cost - lam * recall; lam is
-bisected until the mean recall reaches the target. This traces the lower
-convex hull of achievable (mean recall, mean cost) — an optimistic bound for
-ANY router restricted to the given option set, with perfect information.
+"""Read-only audit diagnostics for Phase 4, using the training split only.
+No model is fitted and no test row is read.
 
 Usage: python python/audit_phase4_train.py configs/phase4_router_sift1m.yaml <train_run>
 """
@@ -32,8 +19,6 @@ import router_lib as rl  # noqa: E402
 
 def lagrange_alloc(rec: np.ndarray, cost: np.ndarray, target: float,
                    extra_cost: float = 0.0) -> dict:
-    """rec/cost: (n_queries, n_options). Cheapest mean cost with mean recall
-    >= target when each query picks one option (perfect information)."""
     def pick(lam):
         j = np.argmin(cost - lam * rec, axis=1)
         idx = np.arange(len(rec))
@@ -76,7 +61,6 @@ def main() -> int:
     out = {"source_train_run": run.name, "n_train": int(len(train)),
            "test_rows_read": 0, "tiers": tiers}
 
-    # ---- A. selection rule re-derivation ----------------------------------
     cvt = pd.read_csv(run / "cv_candidates.csv")
     prim = cvt[cvt["role"] == "primary_candidate"].copy()
     prim["feasible_recomputed"] = (prim["oof_failure_rate"]
@@ -90,7 +74,6 @@ def main() -> int:
         "best_score_ignoring_filter": prim.loc[prim["score"].idxmax(), "name"],
     }
 
-    # ---- B. fixed-ef curve and the objective mismatch ----------------------
     curve = rl.fixed_curve(curves, qid, target)
     dt2 = rl.route(train["oof_DT2"], qid, probe, curves, tiers, target)
     R_oof = float(dt2["recall"].mean())
@@ -110,13 +93,11 @@ def main() -> int:
         "note": "Labels encode the cost of 10/10 per query; the matched "
                 "comparison is on MEAN recall, where 9/10 counts 0.9.",
     }
-    # matched FAILURE rate (per-query objective) instead of mean recall
     ok = curve[curve["failure_rate"] <= dt2["failure"].mean() + 1e-12]
     out["B_objective"]["fixed_at_matched_failure_rate"] = {
         "ef": int(ok["ef"].iloc[0]), "mean_dc": float(ok["mean_dc"].iloc[0]),
         "failure_rate": float(ok["failure_rate"].iloc[0])}
 
-    # ---- C. decomposition at the router's operating point ------------------
     targets = sorted({round(R_oof, 6), 0.97, 0.99, 0.999})
     alloc = {}
     for r in targets:
@@ -129,7 +110,6 @@ def main() -> int:
                 tier_rec, tier_dc, r, extra_cost=float(probe.mean())),
         }
     out["C_omniscient_allocation"] = alloc
-    # tier-label policy (perfect classification of oracle tiers)
     perfect = rl.route(train["tier_label"], qid, probe, curves, tiers, target)
     out["C_perfect_tier_classification"] = {
         "mean_recall": float(perfect["recall"].mean()),
@@ -138,7 +118,6 @@ def main() -> int:
         "fixed_cost_at_that_recall": rl.interp_cost_at_recall(
             curve, perfect["recall"].mean())}
 
-    # ---- D. price of each OOF error type (DT2) ------------------------------
     cells = []
     for t_true in rl.TIERS:
         for t_pred in rl.TIERS:
@@ -168,7 +147,6 @@ def main() -> int:
             float(-(aggr["n"] * aggr["extra_dc_vs_true_tier"]).sum() / n),
     }
 
-    # ---- E. within-tier spread (quantisation) -------------------------------
     rows = []
     for t in rl.TIERS:
         m = (train["tier_label"] == t).to_numpy()
@@ -184,7 +162,6 @@ def main() -> int:
                      "quantisation_overspend_dc": float((d_t - d_o).mean())})
     out["E_within_tier"] = rows
 
-    # ---- F. accuracy expected from feature correlation (Gaussian copula) ----
     rng = np.random.default_rng(20261003)
     sim = {}
     for rho in (0.36, 0.46, 0.56, 0.65, 0.8):
@@ -200,7 +177,6 @@ def main() -> int:
     out["F_observed_two_step_errors_DT2"] = float(
         (np.abs(rl.tier_error(train["oof_DT2"], train["tier_label"])) == 2).mean())
 
-    # ---- G. probe vs search work -------------------------------------------
     d18 = D[:, T[0]]
     out["G_probe"] = {
         "probe_mean_dc": float(probe.mean()),

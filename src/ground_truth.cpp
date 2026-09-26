@@ -11,19 +11,16 @@
 namespace ars {
 namespace {
 
-// Queries are processed in blocks against cache-sized blocks of base vectors,
-// so each base block is reused across many queries while it is in cache.
 constexpr std::size_t kQueryBlock = 32;
 constexpr std::size_t kBaseBlock = 2048;
 
-using Candidate = std::pair<float, std::int32_t>;  // (distance, base id)
+using Candidate = std::pair<float, std::int32_t>;
 
 }  // namespace
 
 float SquaredL2(const float* a, const float* b, std::size_t dim) {
-  // Independent accumulator lanes let the compiler vectorise without
-  // -ffast-math. For integer-valued data such as SIFT every partial sum is an
-  // exactly representable integer, so the result is exact.
+  // Separate accumulators let the compiler vectorise without -ffast-math. On
+  // integer data like SIFT every partial sum is exact, so the result is too.
   constexpr std::size_t kLanes = 16;
   std::array<float, kLanes> acc{};
   std::size_t d = 0;
@@ -84,8 +81,8 @@ KnnResult BruteForceKnnExcluding(const FloatMatrix& base,
     const std::size_t q_begin = static_cast<std::size_t>(qb) * kQueryBlock;
     const std::size_t q_end = std::min(q_begin + kQueryBlock, queries.rows);
 
-    // Max-heap per query holding its current k best (distance, id) pairs.
-    // Lexicographic pair order makes the kept set independent of visit order.
+    // Comparing (distance, id) pairs keeps the result independent of the order
+    // base vectors are visited in.
     std::vector<std::priority_queue<Candidate>> heaps(q_end - q_begin);
 
     for (std::size_t b_begin = 0; b_begin < base.rows; b_begin += kBaseBlock) {

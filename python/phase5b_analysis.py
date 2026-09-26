@@ -1,8 +1,5 @@
-"""Phase 5'(b) analysis: feature -> oracle-effort signal stability (design_doc.md
-A1.6/A1.7; computations pre-declared in docs/notes.md before any real-data state
-existed). Run only after phase5b_checks.py reports ALL_PASS.
-
-No router is fitted, loaded or evaluated. Phase 4b artefacts are not read.
+"""Phase 5'(b) analysis of how stable the feature-to-effort signal is across states.
+Only run it after phase5b_checks.py reports ALL_PASS. No router is involved.
 
 Usage: python python/phase5b_analysis.py configs/phase5/sift1m.yaml <validation_dir>
 """
@@ -29,7 +26,7 @@ CORE = FEATS[:3]
 X = 0.05
 B = 2000
 BOOT_SEED = 20261002
-T1, T2 = 18, 48  # frozen tertile thresholds (derived/sift1m_s0_effort_tiers.json)
+T1, T2 = 18, 48
 TRAJ_STATES = {"id": [10000, 20000, 40000, 80000], "ood": [10000, 20000, 40000, 80000],
                "del": [20000, 80000]}
 EIGHT_PCT_OOD = ("At 8% insertion magnitude, the available pool forces the regional-OOD construction "
@@ -66,7 +63,6 @@ def ranks2d(a):
 
 
 def spearman_rows(fr, yr):
-    """Row-wise Pearson of already-ranked arrays (B, n)."""
     fc = fr - fr.mean(-1, keepdims=True)
     yc = yr - yr.mean(-1, keepdims=True)
     return (fc * yc).sum(-1) / np.sqrt((fc ** 2).sum(-1) * (yc ** 2).sum(-1))
@@ -91,7 +87,6 @@ def main() -> int:
     states = ["S0"] + [f"{t}_{c}" for t, cs in TRAJ_STATES.items() for c in cs]
     n0 = M["n0"]
 
-    # ---- load row-level data -------------------------------------------------------
     rows = []
     data = {}
     for s in seeds:
@@ -125,7 +120,6 @@ def main() -> int:
     e0 = np.where(long.reached_S0 == 1, long.oracle_ef_S0, np.inf)
     long["difficulty_S0"] = np.select([e0 <= T1, e0 <= T2], ["easy", "medium"], "hard")
 
-    # ---- point estimates and bootstrap ---------------------------------------------------
     rng = np.random.default_rng(BOOT_SEED)
     idx = rng.integers(0, nq, size=(B, nq))
     rho, rho_bs = {}, {}
@@ -175,7 +169,6 @@ def main() -> int:
                           "ood_8pct_descriptive_only": n == "ood_80000"})
     cdf = pd.DataFrame([{k: v for k, v in c.items() if k != "per_seed"} for c in cells])
 
-    # ---- H1' -----------------------------------------------------------------------------
     h1 = {}
     for f in FEATS:
         cl = [c["class"] for c in cells if c["feature"] == f]
@@ -194,7 +187,6 @@ def main() -> int:
     h1_overall = ("supported" if all(v == "supported" for v in core_v)
                   else "refuted" if "refuted" in core_v else "inconclusive")
 
-    # ---- H2' -----------------------------------------------------------------------------
     h2 = []
     for c in TRAJ_STATES["id"]:
         for f in FEATS:
@@ -207,7 +199,6 @@ def main() -> int:
                        "status": "inferential (H2')" if inferential else "DESCRIPTIVE ONLY - ≈ ID by construction",
                        "note": "" if inferential else EIGHT_PCT_OOD})
 
-    # ---- H3' -----------------------------------------------------------------------------
     h3 = []
     pairs = [("centroid_dist", "knn_dist"), ("centroid_dist", "score_concentration"),
              ("knn_dist", "score_concentration")]
@@ -221,7 +212,6 @@ def main() -> int:
                        "ci_excludes_0": bool(lo > 0 or hi < 0),
                        "note": EIGHT_PCT_OOD if n == "ood_80000" else ""})
 
-    # ---- trend ---------------------------------------------------------------------------
     trend = []
     for traj, cs in TRAJ_STATES.items():
         for f in FEATS:
@@ -230,7 +220,6 @@ def main() -> int:
             trend.append({"trajectory": traj, "feature": f, "n_points": len(cs),
                           "spearman_logmag_delta": None if np.isnan(r) else float(r), "deltas": dv})
 
-    # ---- descriptive per state -------------------------------------------------------
     base = L.read_fvecs(P["data"]["base"]).astype(np.float64)
     mu0 = base.mean(0)
     scale = np.sqrt(np.trace(np.cov(base, rowvar=False)))
@@ -283,7 +272,6 @@ def main() -> int:
         per_state.append(rec)
     ps = pd.DataFrame(per_state)
 
-    # ---- difficulty strata (descriptive) --------------------------------------------
     strata = []
     for (s, name), d in data.items():
         g = long[(long.seed == int(s)) & (long.state == name)]
@@ -305,7 +293,6 @@ def main() -> int:
     sp = sdf[sdf.state != "S0"].groupby(["state", "stratum"])[
         [f"delta_{f}" for f in FEATS] + ["effort_log2_ratio_mean", "effort_frac_increased", "mean_overlap"]].mean()
 
-    # ---- write --------------------------------------------------------------------------
     ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     od = Path(P["output_dir"]) / f"phase5b_analysis_{ts}"
     od.mkdir(parents=True)
@@ -325,7 +312,6 @@ def main() -> int:
            "eight_pct_ood_wording": EIGHT_PCT_OOD}
     (od / "analysis.json").write_text(json.dumps(rep, indent=1, default=float) + "\n")
 
-    # figure: pooled delta vs magnitude, per feature and trajectory
     fig, axes = plt.subplots(1, 4, figsize=(18, 4.2), sharey=True)
     col = {"id": "#2a6fdb", "ood": "#d9822b", "del": "#3a9d5d"}
     for ax, f in zip(axes, FEATS, strict=True):

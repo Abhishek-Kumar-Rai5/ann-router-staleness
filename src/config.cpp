@@ -36,7 +36,6 @@ std::string ReadFile(const std::string& path) {
   return buf.str();
 }
 
-// Parses the sections shared by every S0 run into `c`.
 void ParseS0(const YAML::Node& root, S0Config& c) {
   c.experiment_name = Get<std::string>(root, "experiment_name", "");
 

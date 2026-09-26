@@ -1,5 +1,3 @@
-# Experiment E plan (docs/exp_e_design_freeze_v2.md; binding only after final approval).
-# Every input is an existing frozen artifact. Nothing here is tuned.
 experiment_name: experiment_e
 design_doc: docs/exp_e_design_freeze_v2.md
 seeds: [42, 43, 44]
@@ -8,13 +6,13 @@ states: [id_10000, id_20000, id_40000, id_80000, ood_10000, ood_20000, ood_40000
 insertion_states: [id_10000, id_20000, id_40000, id_80000, ood_10000, ood_20000, ood_40000, ood_80000]
 deletion_states: [del_20000, del_80000]
 n0: 1000000
-manifest: data/phase5/sift/states/run_manifest.json          # A1 states (unchanged)
+manifest: data/phase5/sift/states/run_manifest.json
 queries: data/sift/sift_query.fvecs
-split_path: splits/sift1m_query_split_seed20261001.csv     # evaluation = split == test
+split_path: splits/sift1m_query_split_seed20261001.csv
 s0_gt_prefix: data/cache/gt_S0_01564caeeb173bc1
 b1_spec: results/phase4b_train_311634ee3011_20261002T145649Z/routers/{seed}/primary/mean_recall_0.95.json
 b1_s0_rows: results/phase4b_eval_old_test_second_look_20261002T175740Z/per_query_rows.csv
-phase5_analysis: results/phase5b_analysis_20261004T230023Z   # H-E3 predictors (reused, not recomputed)
+phase5_analysis: results/phase5b_analysis_20261004T230023Z
 s0:
   42:
     oracle_run: results/8e605bfc5769_20261001T201040Z

@@ -1,5 +1,5 @@
-# Smoke test (design doc §20): whole Phase 1 pipeline on a SIFT subsample, < 1 min.
-# Run after every code change.
+# Quick end-to-end check of the Phase 1 pipeline on a SIFT subsample (under a
+# minute). Run it after every code change.
 experiment_name: smoke_sift_static
 
 dataset:
@@ -11,16 +11,16 @@ dataset:
 index:
   m: 16
   ef_construction: 200
-  seed: 42           # hnswlib level-assignment RNG
-  build_threads: 1   # single-threaded => bit-reproducible graph for this seed
+  seed: 42
+  build_threads: 1  # single-threaded so the graph is reproducible
 
 ground_truth:
-  k: 100             # same depth as the official sift_groundtruth.ivecs
+  k: 100
 
 search:
-  k: 10              # recall@10
+  k: 10
   ef_values: [10, 20, 40, 80, 160, 320]
-  timing_repeats: 3  # median latency reported (design doc §13)
+  timing_repeats: 3
   warmup_queries: 20
 
 paths:

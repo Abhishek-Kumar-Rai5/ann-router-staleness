@@ -1,17 +1,5 @@
-"""Second, read-only validation of the Phase 4 methodology audit.
-TRAINING SPLIT ONLY. No model is fitted, nothing canonical is modified, no
-test-split row is read (asserted).
-
-Sections (see docs/phase4_methodology_validation.md):
-  V1 seed / variance inventory + query-bootstrap CIs + CV-fold spread
-  V2 recall contract of every audit-table row
-  V3 probe-cost accounting checks
-  V4 fixed-ef baseline provenance (bracketing rows, interpolation)
-  V5 independent distance-count check: a pure-Python re-implementation of
-     hnswlib v0.8.0 searchKnn (bare-bone path) that reads the saved index file
-     directly and counts every distance evaluation; ground truth by NumPy
-     brute force. Shares no code with the C++ search / evaluation path.
-  V6 reconstructed five-row table
+"""Second read-only check of the Phase 4 audit, training split only. It includes a
+pure-Python copy of hnswlib's search that counts distance calls independently.
 
 Usage: python python/validate_audit_train.py configs/phase4_router_sift1m.yaml <train_run>
 """
@@ -34,9 +22,6 @@ BOOT = 200
 BOOT_SEED = 20261004
 
 
-# ----------------------------------------------------------------------------
-# Lagrangian allocation (same method as audit_phase4_train.py, but returns the
-# per-query choice so that the recall contract can be inspected).
 def lagrange(rec, cost, target, iters=100):
     idx = np.arange(len(rec))
 
@@ -63,10 +48,7 @@ def contract(rec_chosen, cost_chosen, target):
             "mean_cost": float(cost_chosen.mean())}
 
 
-# ----------------------------------------------------------------------------
-# Independent hnswlib replica (V5).
 class HnswFile:
-    """Reads an hnswlib v0.8.0 saveIndex() file (layout: hnswalg.h:685-713)."""
 
     def __init__(self, path):
         with open(path, "rb") as f:
@@ -98,7 +80,7 @@ class HnswFile:
 
     def links0(self, i):
         row = self.level0[i]
-        n = int(row[0:2].view(np.uint16)[0])          # getListCount: low 16 bits
+        n = int(row[0:2].view(np.uint16)[0])
         return row[4:4 + 4 * n].view(np.uint32)
 
     def links(self, i, level):
@@ -107,8 +89,6 @@ class HnswFile:
         return self.mm[start + 4:start + 4 + 4 * n].view(np.uint32)
 
 
-# libstdc++ heap algorithms (bits/stl_heap.h) with comparator a[0] < b[0]
-# (hnswlib CompareByFirst), so tie order matches std::priority_queue exactly.
 def _push_heap_hole(h, hole, top, value):
     parent = (hole - 1) // 2
     while hole > top and h[parent][0] < value[0]:
@@ -144,8 +124,6 @@ def pq_pop(h):
 
 
 def replica_search(idx: HnswFile, q: np.ndarray, k: int, ef: int):
-    """hnswlib searchKnn (hnswalg.h:1271) + searchBaseLayerST<true>
-    (hnswalg.h:309-440), counting every distance evaluation."""
     count = 0
     qd = q.astype(np.float64)
 
@@ -153,7 +131,7 @@ def replica_search(idx: HnswFile, q: np.ndarray, k: int, ef: int):
         nonlocal count
         count += 1
         d = idx.vec[i].astype(np.float64) - qd
-        return float(np.dot(d, d))      # exact for integer-valued SIFT
+        return float(np.dot(d, d))  # exact for integer-valued SIFT
 
     cur = int(idx.entry)
     curdist = dist(cur)
@@ -174,7 +152,7 @@ def replica_search(idx: HnswFile, q: np.ndarray, k: int, ef: int):
     lower = d0
     while cand:
         cdist = -cand[0][0]
-        if cdist > lower:               # bare_bone_search stop rule
+        if cdist > lower:
             break
         node = cand[0][1]
         pq_pop(cand)
@@ -217,7 +195,6 @@ def main() -> int:
     T = [grid.index(e) for e in tier_efs]
     out = {"n_train": len(train), "test_rows_read": 0}
 
-    # ---------------- V3/V6 core quantities (full train set) ----------------
     dt2 = rl.route(train["oof_DT2"], qid, probe, curves, tiers, target)
     Rt = float(dt2["recall"].mean())
     curve = rl.fixed_curve(curves, qid, target)
@@ -235,7 +212,6 @@ def main() -> int:
     rows["dt2_oof"] = contract(dt2["recall"].to_numpy(),
                                dt2["total_dc"].to_numpy(), target)
     rows["dt2_oof"]["mean_search_cost"] = float(dt2["search_dc"].mean())
-    # fixed: realised contract at the bracketing grid ef values (V4)
     c = curve.sort_values("ef").reset_index(drop=True)
     i_hi = int(np.where(c["mean_recall"] >= Rt - 1e-12)[0][0])
     lo_row, hi_row = c.loc[i_hi - 1], c.loc[i_hi]
@@ -260,7 +236,6 @@ def main() -> int:
             out["V4_fixed_baseline"]["interpolated_failure_rate_equiv"]})
     out["V6_rows"] = rows
 
-    # ---------------- V3 probe accounting checks ----------------------------
     out["V3_probe"] = {
         "dt2_total_minus_search_equals_probe_per_query": bool(np.array_equal(
             dt2["total_dc"].to_numpy() - dt2["search_dc"].to_numpy(), probe)),
@@ -272,7 +247,6 @@ def main() -> int:
                 "probe to the mean cost is exact.",
     }
 
-    # ---------------- V1 variance: query bootstrap + CV folds ---------------
     rng = np.random.default_rng(BOOT_SEED)
     bs = {k: [] for k in ("fixed", "omni_any", "omni_3", "omni_3_probe", "dt2",
                           "gap_fixed_minus_omni3probe", "gap_dt2_minus_fixed",
@@ -326,7 +300,6 @@ def main() -> int:
         "design_requirement": "§13: core conditions repeated across 2-3 seeds",
     }
 
-    # ---------------- V5 independent distance-count check -------------------
     meta = json.loads((Path(inp["oracle_run"]) / "metadata.json").read_text())
     idx_path = meta["index"]["cache_path"]
     idx = HnswFile(idx_path)
@@ -341,14 +314,14 @@ def main() -> int:
     fcfg = yaml.safe_load((Path(inp["features_run"]) / "config.yaml").read_text())
     raw_q = np.fromfile(fcfg["dataset"]["queries"], dtype=np.float32).reshape(
         -1, 129)[:, 1:]
-    base = idx.vec  # vectors as stored in the index file (label == internal id)
+    base = idx.vec
     assert np.array_equal(idx.labels, np.arange(idx.count, dtype=np.uint64))
     checks = []
     for name, q in picks.items():
         qv = raw_q[q]
         diff = base.astype(np.float64) - qv.astype(np.float64)
         gt_d = np.einsum("ij,ij->i", diff, diff)
-        kth = np.partition(gt_d, 9)[9]                      # NumPy ground truth
+        kth = np.partition(gt_d, 9)[9]
         row = train[train["query_id"] == q].iloc[0]
         rec = {"query_id": q, "case": name, "true_tier": row["tier_label"],
                "oof_tier": row["oof_DT2"], "results": {}}

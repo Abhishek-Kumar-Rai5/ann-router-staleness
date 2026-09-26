@@ -1,14 +1,5 @@
-"""Phase 5'(b) real-data orchestration (design_doc.md Addendum A1; pre-declared in
-docs/notes.md). Same constructions and C++ tools as the validated synthetic run
-(phase5_run.py), plus:
-- the A1.4(1) SIFT insertion pool, rebuilt and checked against the stored file;
-- S0 per seed = the canonical Phase 2/3 (seed 42) and Phase 4b (43, 44) runs, which
-  are only read; S0 through the state path is run for the V2 reproduction check;
-- ars_evolve runs in parallel (each is single-threaded, so deterministic), and is
-  run a second time into repro_root for V6;
-- feature re-runs on every state (V9) and the pre-declared oracle re-runs (V10).
-Resumable: run_manifest.json is rewritten after every step, and finished steps are
-skipped.
+"""Runs the Phase 5'(b) real-data pipeline. It can be resumed: finished steps are
+skipped using run_manifest.json.
 
 Usage: python python/phase5b_run.py configs/phase5/sift1m.yaml
 """
@@ -47,7 +38,6 @@ def evolve_cfg(P, seed, traj, kind, order, cnts, state_dir, s0_index):
 
 
 def run_parallel(jobs):
-    """jobs: list of (key, cfg_text, cfg_path). Returns {key: run_dir}."""
     procs = {}
     for key, text, path in jobs:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +63,6 @@ def main() -> int:
     P["split_path"], P["split_fixed"] = D["split_path"], False
     P["split_seed"], P["split_test_size"] = D["split_seed"], D["split_test_size"]
 
-    # ---- A1.4(1) pool: rebuild and require equality with the stored file -------
     learn, Q = L.read_fvecs(D["learn"]), L.read_fvecs(P["queries"])
     conf = pd.read_csv(D["confirm_ids"])["source_row"].to_numpy()
     pool, rows = L.sift_pool(learn, Q, conf)
@@ -106,7 +95,6 @@ def main() -> int:
                 "order_sha256": {k: sha(v) for k, v in orders.items()}})
     cnt = {"insert": counts, "delete": dcounts}
 
-    # ---- S0 index per seed (from the canonical oracle run) --------------------
     s0_index = {}
     for seed in P["index"]["seeds"]:
         c = P["s0_canonical"][seed]
@@ -115,7 +103,6 @@ def main() -> int:
         man["seeds"][str(seed)]["states"]["S0"] = {"oracle_run": c["oracle"], "features_run": c["features"],
                                                    "index": s0_index[seed], "canonical": True}
 
-    # ---- state production (V3) and its reproduction (V6), in parallel ----------
     for tag, sroot in (("evolve", root), ("evolve_repro", rroot)):
         jobs = []
         for seed in P["index"]["seeds"]:
@@ -132,7 +119,6 @@ def main() -> int:
                 man["seeds"][str(seed)][tag][traj] = erun
             save(root, man)
 
-    # ---- oracle + features on every state ----------------------------------------
     for seed in P["index"]["seeds"]:
         m = man["seeds"][str(seed)]
         cfgdir = root / f"seed{seed}" / "configs"
@@ -166,7 +152,6 @@ def main() -> int:
                 save(root, man)
                 print(f"[phase5b] seed {seed} {name} done", flush=True)
 
-    # ---- V9 feature re-runs (all states), V10 oracle re-runs (pre-declared) -------
     for seed in P["index"]["seeds"]:
         m = man["seeds"][str(seed)]
         cfgdir = root / f"seed{seed}" / "configs" / "repro"

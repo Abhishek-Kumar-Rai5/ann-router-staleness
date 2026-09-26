@@ -1,14 +1,5 @@
-// Phase 3: live routing features on the static S0 index (design doc §9, §21).
-//
-// For every query: a shallow probe search (probe_k, probe_ef) gives the local
-// k-NN distance proxy and the score-concentration ratio; a deeper probe
-// (lid_k, lid_ef) gives the LID ablation feature; the centroid of the indexed
-// vectors gives the centroid distance. Probe distance counts are recorded per
-// query because a router pays them before its main search.
-//
-// Deliberately reads no ground truth and no oracle labels: features.csv holds
-// router inputs only. The split file is used solely to tag rows.
-//
+// Computes the live routing features for every query. It never reads ground
+// truth or oracle labels; the split file is only used to tag rows.
 // Usage: ars_features <config.yaml>
 
 #include <omp.h>
@@ -57,7 +48,6 @@ int main(int argc, char** argv) {
     std::cerr << "[ars] index " << (s0.from_cache ? "loaded" : "built") << " ("
               << s0.index.Size() << " elements)\n";
 
-    // Centroid of the indexed vectors (the S0 base set) — index content only.
     const std::vector<double> centroid =
         ars::ComputeCentroid(data.base, data.excluded);
     std::ostringstream centroid_text;

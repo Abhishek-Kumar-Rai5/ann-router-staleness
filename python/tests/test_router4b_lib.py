@@ -1,5 +1,3 @@
-"""Unit tests for the Phase 4b router logic (python/router4b_lib.py)."""
-
 import sys
 from pathlib import Path
 
@@ -18,11 +16,11 @@ CFG = {"families": {
 
 
 def test_candidate_oracle_index_stable_reach_and_beyond_last():
-    s = np.array([[1, 1, 1],      # 0: probe already succeeds
-                  [0, 1, 1],      # 1
-                  [1, 0, 1],      # 2: transient success at 0 -> stable at 2
-                  [0, 0, 0],      # 3: beyond last
-                  [0, 1, 0]],     # 4: last candidate fails -> beyond last
+    s = np.array([[1, 1, 1],
+                  [0, 1, 1],
+                  [1, 0, 1],
+                  [0, 0, 0],
+                  [0, 1, 0]],
                  dtype=bool)
     assert rb.candidate_oracle_index(s).tolist() == [0, 1, 2, 3, 3]
 
@@ -40,7 +38,6 @@ def test_calibrate_tau_smallest_meeting_target():
                   [0.5, 0.8, 1.0]])
     succ = np.array([[0, 1, 1], [1, 1, 1], [0, 0, 1], [0, 1, 1]])
     tau, q = rb.calibrate_tau(P, succ, 0.75)
-    # tau <= 0.1: everyone picks 0 -> success 1/4; tau 0.301..0.5: q2 picks 2.
     c, _ = rb.choose(P, tau)
     assert succ[np.arange(4), c].mean() >= 0.75 and q >= 0.75
     c_prev, _ = rb.choose(P, tau - 0.001)
@@ -62,7 +59,7 @@ def test_predict_candidates_is_monotone():
     y = np.digitize(X[:, 0] + rng.normal(scale=0.5, size=600), [-1, 0, 1])
     models, oc = rb.fit_candidate_models("DT3", CFG, X, y, 4)
     P = rb.predict_candidates(models, X)
-    assert (np.diff(P, axis=1) >= 0).all() and oc == 1   # last target all-ones
+    assert (np.diff(P, axis=1) >= 0).all() and oc == 1
 
 
 @pytest.mark.parametrize("name", ["LR", "DT2", "DT3", "DT4"])
@@ -83,18 +80,16 @@ def test_select_family_tie_goes_to_simplest():
     rows = [{"name": "DT2", "cost": 999, "feasible": True},
             {"name": "LR", "cost": 1000, "feasible": True},
             {"name": "DT4", "cost": 990, "feasible": True}]
-    # 1% band above 990 ends at 999.9: DT2 (999) is inside, LR (1000) is not.
     assert rb.select_family(rows, 0.01, order) == "DT2"
-    rows[0]["cost"] = 1009                     # now outside the band
+    rows[0]["cost"] = 1009
     assert rb.select_family(rows, 0.01, order) == "DT4"
-    rows[2]["feasible"] = False                # DT4 excluded -> best LR 1000
-    assert rb.select_family(rows, 0.01, order) == "DT2"   # 1009 <= 1010
+    rows[2]["feasible"] = False
+    assert rb.select_family(rows, 0.01, order) == "DT2"
     assert rb.select_family([{"name": "LR", "cost": 1, "feasible": False}],
                             0.01, order) is None
 
 
 def test_splitmix64_reference_vector_and_mix_determinism():
-    # Reference: SplitMix64 with state 0 -> first output 0xE220A8397B1DCDAF.
     assert rb.splitmix64(0) == 0xE220A8397B1DCDAF
     assert rb.fnv1a64("") == 1469598103934665603
     u = [rb.mix_uniform("sift_query", r, 20261006) for r in range(20000)]
@@ -115,8 +110,6 @@ def test_two_ef_mix_hits_target_in_expectation():
 
 
 def test_tree_export_matches_sklearn_float32_split_semantics():
-    # A value just above a split threshold in float64 that rounds onto/below
-    # it in float32 must follow sklearn's (float32) branch.
     rng = np.random.default_rng(3)
     X = rng.normal(size=(400, 1)) * 100 + 200
     t = (X[:, 0] > 200).astype(int)
@@ -125,9 +118,9 @@ def test_tree_export_matches_sklearn_float32_split_semantics():
     thr = e["threshold"][0]
     probes = []
     x = np.float64(thr)
-    for _ in range(200):                       # walk up through float64 values
+    for _ in range(200):
         x = np.nextafter(x, np.inf)
-        if np.float64(np.float32(x)) <= thr:   # float32-rounds onto/below threshold
+        if np.float64(np.float32(x)) <= thr:
             probes.append(x)
     assert probes, "no float32/float64 gap value found"
     Xp = np.array(probes)[:, None]

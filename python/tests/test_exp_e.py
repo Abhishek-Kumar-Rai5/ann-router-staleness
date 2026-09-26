@@ -1,7 +1,4 @@
-"""Synthetic tests for Experiment E (python/exp_e_lib.py, python/exp_e_analysis.py).
-
-All data here are synthetic: no real or evolved-state experiment data is read.
-"""
+"""Experiment E tests. They only use synthetic data."""
 
 import json
 import sys
@@ -17,10 +14,9 @@ import exp_e_analysis as A  # noqa: E402
 import exp_e_lib as E  # noqa: E402
 
 
-# ------------------------------------------------------------------------- H-E1 ------
 def test_d_zero_when_ratio_unchanged_and_signs():
-    assert E.d_stat(1110, 1000, 1110, 1000) == pytest.approx(0)          # DARTH-like S0 gap kept
-    assert E.d_stat(1221, 1000, 1110, 1000) == pytest.approx(0.10)       # 10% proportional drift
+    assert E.d_stat(1110, 1000, 1110, 1000) == pytest.approx(0)
+    assert E.d_stat(1221, 1000, 1110, 1000) == pytest.approx(0.10)
     assert E.d_stat(999, 1000, 1110, 1000) == pytest.approx(-0.10)
     assert E.d_stat(1300, 1000, 1000, 1000) > 0
     assert E.d_stat(700, 1000, 1000, 1000) < 0
@@ -28,7 +24,6 @@ def test_d_zero_when_ratio_unchanged_and_signs():
 
 def test_d_equals_r_when_s0_ratio_is_one_and_anchors_s0():
     assert E.d_stat(1050, 1000, 900, 900) == pytest.approx(E.r_stat(1050, 1000))
-    # Raw R would report the S0 gap; D does not.
     assert E.r_stat(1110, 1000) == pytest.approx(0.11)
     assert E.d_stat(1110, 1000, 1110, 1000) == pytest.approx(0)
 
@@ -67,12 +62,11 @@ def test_family_verdict():
     assert E.family_verdict(["STALE-WORSE"]) == "STALE-FAMILY"
 
 
-# ------------------------------------------------------------------------- H-E2 ------
 def test_transitions_and_rates():
     p0 = np.array([1, 1, 1, 1, 0, 0, 0, 0], bool)
     ps = np.array([1, 1, 0, 0, 0, 1, 0, 1], bool)
     assert E.transitions(p0, ps) == {"stable_pass": 2, "newly_failing": 2, "stable_fail": 2, "improved": 2}
-    assert E.nf_rate(p0, ~ps) == pytest.approx(0.5)            # denominator = S0-pass cohort (4)
+    assert E.nf_rate(p0, ~ps) == pytest.approx(0.5)
     idx = np.array([[0, 0, 2, 4], [1, 2, 3, 3]])
     np.testing.assert_allclose(E.nf_rate(p0, ~ps, idx), [1 / 3, 3 / 4])
 
@@ -81,18 +75,17 @@ def test_is_pass_contract():
     np.testing.assert_array_equal(E.is_pass([1.0, 0.9999999999, 0.9, 1 - 1e-6]), [True, True, False, False])
 
 
-# ------------------------------------------------------------------------- H-E3 ------
 def test_spearman_rows_matches_scipy_including_ties():
     rng = np.random.default_rng(3)
-    x = rng.integers(0, 4, size=(5, 12)).astype(float)   # many ties
+    x = rng.integers(0, 4, size=(5, 12)).astype(float)
     y = rng.normal(size=(5, 12))
     for r in range(5):
         assert E.spearman_rows(x[r:r + 1], y[r:r + 1])[0] == pytest.approx(stats.spearmanr(x[r], y[r]).statistic)
-    assert np.isnan(E.spearman_rows(np.ones((1, 6)), y[:1, :6])[0])     # constant → undefined
+    assert np.isnan(E.spearman_rows(np.ones((1, 6)), y[:1, :6])[0])
 
 
 def test_boot_p_and_holm():
-    assert E.boot_p_two_sided(np.full(2000, 0.3)) == pytest.approx(1 / 2000)   # floor
+    assert E.boot_p_two_sided(np.full(2000, 0.3)) == pytest.approx(1 / 2000)
     assert E.boot_p_two_sided(np.r_[np.full(1000, -1.0), np.full(1000, 1.0)]) == pytest.approx(1.0)
     assert E.boot_p_two_sided(np.r_[np.full(100, -1.0), np.full(1900, 1.0)]) == pytest.approx(0.1)
     from statsmodels.stats.multitest import multipletests
@@ -103,7 +96,6 @@ def test_boot_p_and_holm():
     np.testing.assert_array_equal(rej, r2)
 
 
-# ------------------------------------------------------------------------- H-E4 ------
 def test_h_e4_bias_mace_and_stopped_filter():
     stopped = np.array([1, 1, 1, 0, 0], bool)
     pred = np.array([0.96, 0.97, 0.95, 0.5, 0.6])
@@ -119,7 +111,6 @@ def test_h_e4_bias_mace_and_stopped_filter():
     assert big["small_n"] is False
 
 
-# ----------------------------------------------------------------------- trends ------
 def _trend_df(seed_shift=0.0):
     rows = []
     for s, u in zip((42, 43, 44), (0.01, -0.02, 0.015), strict=True):
@@ -151,28 +142,25 @@ def test_ols_slope():
     np.testing.assert_allclose(E.ols_slope([0, 1, 2, 3], reps), [1.0, -1.0])
 
 
-# --------------------------------------------------------------- synthetic fixture ----
 SEEDS = (42, 43, 44)
 INS = ["id_10000", "id_20000", "ood_10000", "ood_20000"]
 DELS = ["del_20000", "del_80000"]
 N = 200
-# Designed frozen/reference cost ratios per state (B1: S0 ratio 1; DARTH: S0 ratio 1.11).
 B1_F = {"id_10000": 1.00, "id_20000": 1.02, "ood_10000": 1.30, "ood_20000": 1.10,
         "del_20000": 1.00, "del_80000": 0.70}
 DARTH_F = {"id_10000": 1.00, "id_20000": 1.01, "ood_10000": 0.99, "ood_20000": 1.02,
            "del_20000": 1.00, "del_80000": 1.01}
 B1_NEWLY_FAIL = {"id_10000": 0, "id_20000": 2, "ood_10000": 40, "ood_20000": 4, "del_20000": 0, "del_80000": 1}
-# Counts large enough that no bootstrap resample makes all cells identical (a degenerate
-# replicate is a hard stop by design; see test_degenerate_h_e3_input_stops).
 DARTH_NEWLY_FAIL = {"id_10000": 10, "id_20000": 15, "ood_10000": 8, "ood_20000": 20, "del_20000": 5, "del_80000": 12}
 
 
 def make_fixture():
     qids = np.arange(1000, 1000 + N)
-    base = np.repeat(np.linspace(600, 1600, N // 2), 2)       # pairs share a base cost
-    eps = np.tile([0.05, -0.05], N // 2)                       # exactly cancelling pair noise
-    b1_pass0 = np.arange(N) < 140                              # 70% pass at S0
-    darth_pass0 = np.arange(N) < 150                           # 75% pass at S0
+    # Counts are large enough that no bootstrap resample makes every cell identical.
+    base = np.repeat(np.linspace(600, 1600, N // 2), 2)
+    eps = np.tile([0.05, -0.05], N // 2)
+    b1_pass0 = np.arange(N) < 140
+    darth_pass0 = np.arange(N) < 150
     rows = []
 
     def add(pol, s, st, cost, passv, extra=None):
@@ -186,7 +174,7 @@ def make_fixture():
             ref = base * g
             ref_pass = b1_pass0.copy()
             if st != "S0":
-                ref_pass[:1] = False                           # reference loses 1 S0 passer
+                ref_pass[:1] = False
             b1 = ref if st == "S0" else ref * B1_F[st] * (1 + eps)
             b1_pass = b1_pass0.copy()
             if st != "S0":
@@ -195,7 +183,7 @@ def make_fixture():
             d_pass = darth_pass0.copy()
             if st != "S0":
                 d_pass[:DARTH_NEWLY_FAIL[st]] = False
-            stopped = (np.arange(N) % 10) != 0                 # 90% early-stopped
+            stopped = (np.arange(N) % 10) != 0
             add("REF", s, st, ref, ref_pass)
             add("B1", s, st, b1, b1_pass)
             add("DARTH", s, st, dr, d_pass, {
@@ -229,10 +217,8 @@ def test_end_to_end_h_e1(result):
     assert b1["ood_20000"]["D_bar"] == pytest.approx(0.10) and b1["ood_20000"]["class"] == "INCONCLUSIVE"
     assert b1["del_80000"]["D_bar"] == pytest.approx(-0.30) and b1["del_80000"]["class"] == "STALE-CHEAPER"
     assert result["H-E1"]["B1"]["family_verdict"] == {"insertion": "STALE-FAMILY", "deletion": "STALE-FAMILY"}
-    # B1: D equals raw R (S0 ratio exactly 1).
     ps = b1["ood_10000"]["per_seed"][42]
     assert ps["D"] == pytest.approx(ps["R_descriptive"])
-    # DARTH: raw R carries the S0 gap (≈ 0.11) but D is anchored away from it.
     d = result["H-E1"]["DARTH"]["cells"]
     assert d["id_10000"]["per_seed"][42]["R_descriptive"] == pytest.approx(0.11)
     assert d["id_10000"]["D_bar"] == pytest.approx(0, abs=1e-12)
@@ -261,8 +247,6 @@ def test_end_to_end_h_e3_h_e4_trends(result):
     h4 = result["H-E4"]["primary_id"]
     s0 = h4["S0"]["per_seed"][42]
     assert s0["stopped_fraction"] == pytest.approx(0.9) and s0["n_stopped"] == 180
-    # Stopped = index % 10 != 0 (180). Of these, 135 are S0 passers (realised 1.0) and 45 are
-    # not (0.9); pred = 0.96 for all stopped queries. Cap-run queries are excluded.
     exp_bias = (135 * (0.96 - 1.0) + 45 * (0.96 - 0.9)) / 180
     assert s0["bias"] == pytest.approx(exp_bias)
     assert s0["mace"] == pytest.approx((135 * 0.04 + 45 * 0.06) / 180)
@@ -279,7 +263,6 @@ def test_end_to_end_deterministic():
     assert json.dumps(a, sort_keys=True, default=str) == json.dumps(b, sort_keys=True, default=str)
 
 
-# ------------------------------------------------------------------ §16 validation ----
 def test_validation_hard_fails():
     rows, pq, ps, cfg = make_fixture()
     drop = rows[~((rows.policy == "DARTH") & (rows.seed == 43) & (rows.state == "del_80000"))]
@@ -304,7 +287,7 @@ def test_validation_hard_fails():
 
 def test_degenerate_h_e3_input_stops():
     rows, pq, ps, cfg = make_fixture()
-    pq = pq.assign(overlap_decay=0.5)                  # constant predictor: Spearman undefined
+    pq = pq.assign(overlap_decay=0.5)
     ps = ps.assign(update_fraction=0.01, distributional_drift=0.1)
     with pytest.raises(A.AnalysisInputError, match="undefined"):
         A.analyze(rows, pq, ps, cfg)

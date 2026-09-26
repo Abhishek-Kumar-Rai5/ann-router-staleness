@@ -1,6 +1,3 @@
-// Phase 0 smoke tests: verify the toolchain, OpenMP, and that hnswlib
-// compiles and links as a black box. No project logic is tested here.
-
 #include <gtest/gtest.h>
 #include <omp.h>
 
@@ -31,7 +28,6 @@ TEST(Toolchain, OpenMPRunsParallelRegion) {
   EXPECT_GE(omp_get_max_threads(), 1);
 }
 
-// Each inserted point, queried exactly, should be its own nearest neighbour.
 TEST(HnswlibSmoke, SelfQueryReturnsSelf) {
   constexpr int kDim = 16;
   constexpr std::size_t kN = 500;

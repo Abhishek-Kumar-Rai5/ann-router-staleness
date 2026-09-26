@@ -1,19 +1,6 @@
-"""Fix the effort tiers (= fixed-ef baselines) and difficulty-tertile thresholds
-from the S0 TRAINING split, then apply the frozen thresholds to all queries.
-
-Rules (documented in docs/notes.md, Phase 3, before this script was run):
-  Q(p)      = smallest grid ef e such that >= p of TRAIN queries have
-              oracle_ef <= e (always an actual grid value).
-  tiers     ef_low = Q(1/3), ef_med = Q(2/3), ef_high = Q(0.99). Used both as
-            the three fixed-ef baselines and as the router's output tiers.
-  tier label of a query = smallest tier value >= its oracle ef; above ef_high
-            or censored -> "high" (fails the target even there).
-  tertiles  T1 = Q(1/3), T2 = Q(2/3); easy <= T1 < medium <= T2 < hard;
-            censored -> hard. Ties go to the lower group.
-
-Leakage guard: thresholds are computed by fit_thresholds(), which receives a
-frame that has been filtered to split == "train" and asserts it. Test rows are
-only touched afterwards, by assign(), with already-frozen numbers.
+"""Fixes the effort tiers and difficulty thresholds from the S0 training split,
+then applies those frozen numbers to every query. Test rows are only touched
+after the thresholds are fixed.
 
 Usage: python python/define_effort_tiers.py --oracle <oracle_run> --out derived
 """
@@ -32,7 +19,6 @@ TERTILE_QUANTILES = {"T1": 1 / 3, "T2": 2 / 3}
 
 
 def grid_quantile(oracle_ef: pd.Series, grid: list, p: float) -> int:
-    """Smallest grid value e with empirical CDF(e) >= p."""
     cdf = np.array([(oracle_ef <= e).mean() for e in grid])
     return int(grid[int(np.argmax(cdf >= p - 1e-12))])
 
@@ -54,7 +40,7 @@ def tier_label(oracle_ef, reached, tiers):
     for name in ("low", "med", "high"):
         if oracle_ef <= tiers[name]:
             return name
-    return "high"  # needs more than ef_high: fails even at the top tier
+    return "high"  # needs more than ef_high, so it fails even at the top tier
 
 
 def stratum(oracle_ef, reached, tert):
@@ -87,13 +73,10 @@ def main() -> int:
     grid = meta["oracle"]["ef_grid"]
     labels = pd.read_csv(run / "oracle_labels.csv")
 
-    # 1. Fit on TRAIN only.
     train = labels[labels["split"] == "train"].copy()
     fit = fit_thresholds(train, grid)
     train_bytes = train[["query_id", "oracle_ef"]].to_csv(index=False).encode()
 
-    # 2. Train-only description of the three fixed-ef baselines (from the
-    #    stored per-query curves; no new search).
     curves = pd.read_csv(run / "oracle_curves.csv")
     ctr = curves[curves["split"] == "train"]
     baselines_train = {}
@@ -107,7 +90,6 @@ def main() -> int:
             "mean_distance_computations": float(
                 c["distance_computations"].mean())}
 
-    # 3. Apply the frozen thresholds to every query.
     a = assign(labels, fit)
     counts = {
         s: {"tier_label": a[a["split"] == s]["tier_label"].value_counts()

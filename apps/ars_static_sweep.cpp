@@ -1,8 +1,4 @@
-// Phase 1: static S0 baseline. Builds (or loads) the HNSW index over the base
-// set, computes (or loads) exact ground truth, then runs a fixed-efSearch
-// sweep over every query, single-threaded, writing one row per
-// (query, ef) to results.csv plus a metadata.json alongside it.
-//
+// Phase 1 baseline: a fixed-ef sweep over every query on the static S0 index.
 // Usage: ars_static_sweep <config.yaml>
 
 #include <omp.h>
@@ -39,7 +35,7 @@ struct QueryOutcome {
   double recall = 0.0;
   double recall_tie_aware = 0.0;
   std::uint64_t distance_computations = 0;
-  std::vector<double> latency_us;  // one per timing repeat
+  std::vector<double> latency_us;
 };
 
 double Median(std::vector<double> v) {
@@ -81,14 +77,12 @@ int main(int argc, char** argv) {
               << " in " << built.seconds << " s (" << built.index.Size()
               << " elements)\n";
 
-    // Sweep. Single-threaded on purpose: latency is only comparable that way
-    // (design doc section 13), and Search() sets an index-wide ef. Repeats are
-    // the outer loop; recall and distance counts must be identical across
-    // repeats (search is deterministic), which is checked below.
     const std::size_t nq = queries.rows;
     const std::size_t n_ef = cfg.ef_values.size();
     std::vector<QueryOutcome> outcomes(n_ef * nq);
     const auto t_sweep = Clock::now();
+    // Single-threaded on purpose: latency is only comparable that way, and
+    // Search() sets ef for the whole index.
     for (int rep = 0; rep < cfg.timing_repeats; ++rep) {
       for (std::size_t e = 0; e < n_ef; ++e) {
         const std::size_t ef = cfg.ef_values[e];

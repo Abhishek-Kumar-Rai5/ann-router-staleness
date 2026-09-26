@@ -1,10 +1,5 @@
 #pragma once
 
-// Experiment C (design_doc.md Addendum C1): an independent re-implementation of
-// the DARTH early-termination mechanism (Chatzakis et al., SIGMOD'26; see
-// THIRD_PARTY.md) on hnswlib's public stop-condition API. hnswlib itself is not
-// modified. Kept separate from the Phase 4b, A1 and oracle code.
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -16,7 +11,7 @@
 
 namespace ars::darth {
 
-// Model input order, frozen in design_doc.md C1.9 (= DARTH training order).
+// Feature order must match the order the model was trained with.
 inline constexpr std::size_t kNumFeatures = 11;
 inline constexpr std::array<const char*, kNumFeatures> kFeatureNames = {
     "step",          "dists",         "inserts",      "first_nn_dist",
@@ -24,12 +19,9 @@ inline constexpr std::array<const char*, kNumFeatures> kFeatureNames = {
     "percentile_25", "percentile_50", "percentile_75"};
 using Features = std::array<double, kNumFeatures>;
 
-// Features from the search counters and the current k-best distances
-// (any order; must hold exactly k values).
 Features MakeFeatures(int step, int dists, int inserts, float first_nn_dist,
                       std::vector<float> kbest);
 
-// LightGBM booster loaded from a text model (C API, single-row prediction).
 class Predictor {
  public:
   explicit Predictor(const std::string& model_path);
@@ -46,30 +38,30 @@ class Predictor {
 };
 
 enum class Mode {
-  kPlain,    // no prediction: must reproduce hnswlib searchKnn exactly
-  kTrace,    // plain search + one observation after every distance
-  kPredict,  // DARTH early termination
+  kPlain,  // must reproduce hnswlib's searchKnn exactly
+  kTrace,
+  kPredict,
 };
 
 struct Params {
   std::size_t k = 10;
-  std::size_t ef = 0;          // hnswlib beam (search cap)
-  bool no_deletions = true;    // emulate searchKnn's no-deletion stop rule
-  double target_recall = 0.0;  // kPredict
-  int ipi = 0;                 // kPredict: initial / maximum interval
-  int mpi = 0;                 // kPredict: minimum interval
+  std::size_t ef = 0;
+  bool no_deletions = true;
+  double target_recall = 0.0;
+  int ipi = 0;
+  int mpi = 0;
 };
 
 struct Observation {
   Features x;
-  double recall;  // recall@k by id of the current k-best
+  double recall;
 };
 
-// Per-query stop condition; construct a fresh one for every query.
+// Holds per-query state, so make a new one for every query.
 class StopCondition : public hnswlib::BaseSearchStopCondition<float> {
  public:
   StopCondition(const Params& p, Mode mode, const Predictor* predictor,
-                const std::int32_t* gt_ids);  // gt_ids: kTrace only
+                const std::int32_t* gt_ids);
 
   void add_point_to_result(hnswlib::labeltype label, const void* datapoint,
                            float dist) override;
@@ -104,8 +96,8 @@ class StopCondition : public hnswlib::BaseSearchStopCondition<float> {
   const Predictor* predictor_;
   const std::int32_t* gt_ids_;
 
-  std::size_t result_size_ = 0;  // size of hnswlib's result set
-  std::vector<std::pair<float, hnswlib::labeltype>> kbest_;  // max-heap
+  std::size_t result_size_ = 0;
+  std::vector<std::pair<float, hnswlib::labeltype>> kbest_;
   int inserts_ = 0;
   float first_nn_ = -1.0F;
   int dists_ = 0;

@@ -15,7 +15,6 @@ Features MakeFeatures(int step, int dists, int inserts, float first_nn_dist,
     throw std::invalid_argument("MakeFeatures: empty k-best");
   }
   std::sort(kbest.begin(), kbest.end());
-  // Single-precision accumulation and population variance (C1.9).
   float sum = 0.0F;
   float sum_sq = 0.0F;
   for (const float d : kbest) {
@@ -116,8 +115,6 @@ std::vector<hnswlib::labeltype> StopCondition::KBestLabels() const {
   return out;
 }
 
-// The check (or observation) due after the most recent distance, evaluated
-// after that point's possible insertion into the result.
 void StopCondition::RunDueCheck() {
   if (!due_) {
     return;
@@ -140,11 +137,10 @@ void StopCondition::RunDueCheck() {
     }
     return;
   }
-  // kPredict
   ++calls_;
   since_check_ = 0;
   if (!full) {
-    last_pred_ = 0.0;  // fewer than k insertions: no inference, pi unchanged
+    last_pred_ = 0.0;  // fewer than k results yet, so no prediction
     return;
   }
   const auto t0 = std::chrono::steady_clock::now();
@@ -194,8 +190,8 @@ bool StopCondition::should_stop_search(float candidate_dist,
   if (stopped_) {
     return true;
   }
-  // hnswlib's own rules: searchKnn without deletions stops on the distance
-  // bound alone; the general path also requires a full result set.
+  // Same stop rule as hnswlib: without deletions it stops on the distance
+  // bound alone; otherwise the result set must also be full.
   const bool stop = p_.no_deletions
                         ? candidate_dist > lower_bound
                         : candidate_dist > lower_bound && result_size_ == p_.ef;
@@ -207,10 +203,10 @@ bool StopCondition::should_stop_search(float candidate_dist,
 
 bool StopCondition::should_consider_candidate(float candidate_dist,
                                               float lower_bound) {
-  RunDueCheck();  // previous distance's check, if its point was not added
+  RunDueCheck();
   ++dists_;
   if (stopped_) {
-    return false;  // result frozen at the decision point
+    return false;
   }
   ++since_check_;
   if (mode_ == Mode::kTrace ||
@@ -219,7 +215,7 @@ bool StopCondition::should_consider_candidate(float candidate_dist,
   }
   const bool consider = result_size_ < p_.ef || lower_bound > candidate_dist;
   if (!consider) {
-    RunDueCheck();  // nothing will be added for this distance
+    RunDueCheck();
   }
   return consider;
 }
@@ -228,7 +224,7 @@ bool StopCondition::should_remove_extra() { return result_size_ > p_.ef; }
 
 void StopCondition::filter_results(
     std::vector<std::pair<float, hnswlib::labeltype>>& /*candidates*/) {
-  RunDueCheck();  // the last distance of the search
+  RunDueCheck();
 }
 
 }  // namespace ars::darth

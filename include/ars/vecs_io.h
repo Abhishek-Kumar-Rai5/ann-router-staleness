@@ -8,7 +8,6 @@
 
 namespace ars {
 
-// Dense row-major matrix. Used for vectors (float) and neighbour ids (int32).
 template <typename T>
 struct DenseMatrix {
   std::vector<T> data;
@@ -26,9 +25,6 @@ using IdMatrix = DenseMatrix<std::int32_t>;
 
 inline constexpr std::size_t kAllRows = std::numeric_limits<std::size_t>::max();
 
-// TEXMEX .fvecs / .ivecs format: each vector is a little-endian int32 dim
-// header followed by dim 4-byte values. Every vector must have the same dim.
-// Reads the first min(max_rows, total) vectors; throws on malformed input.
 FloatMatrix ReadFvecs(const std::string& path, std::size_t max_rows = kAllRows);
 IdMatrix ReadIvecs(const std::string& path, std::size_t max_rows = kAllRows);
 

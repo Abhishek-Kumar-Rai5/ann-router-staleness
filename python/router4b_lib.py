@@ -1,13 +1,4 @@
-"""Phase 4b router logic (frozen contract: docs/phase4_redesign.md as amended by
-docs/phase4_bias_audit.md §10 and the user's Phase 4b gap resolutions).
-
-Pure functions on NumPy arrays so every rule is unit-tested
-(python/tests/test_router4b_lib.py).
-
-Candidates are ordered by cost: index 0 = "probe result", then the frozen
-ladder 20 .. 2661. Label y_i = candidate-oracle index (stable reach within
-candidates); y_i = M ("beyond last") if no candidate satisfies the target.
-"""
+"""Phase 4b router logic, kept as pure functions so every rule can be unit-tested."""
 
 from __future__ import annotations
 
@@ -20,11 +11,9 @@ from sklearn.tree import DecisionTreeClassifier
 MASK64 = (1 << 64) - 1
 
 
-# ------------------------------------------------------------- labels -------
-
+# Smallest candidate from which success holds at every larger one; M if the
+# last candidate fails.
 def candidate_oracle_index(success: np.ndarray) -> np.ndarray:
-    """success: (n, M) bool. Smallest j such that success holds at j and at
-    every larger candidate; M if the last candidate fails."""
     n, m = success.shape
     y = np.full(n, m)
     ok = np.ones(n, bool)
@@ -34,11 +23,7 @@ def candidate_oracle_index(success: np.ndarray) -> np.ndarray:
     return y
 
 
-# ------------------------------------------------------------- models -------
-
 class ConstantModel:
-    """Used when a training target has one class (approved gap resolution 2):
-    predicts the observed class probability (0.0 or 1.0)."""
 
     def __init__(self, p: float):
         self.p = float(p)
@@ -60,7 +45,6 @@ def make_family(name: str, cfg: dict):
 
 
 def fit_binary(name, cfg, X, t):
-    """Fit P(t=1|x). One-class target -> ConstantModel (flag returned)."""
     if t.min() == t.max():
         return ConstantModel(float(t[0])), True
     m = make_family(name, cfg).fit(X, t)
@@ -76,7 +60,6 @@ def proba1(model, X) -> np.ndarray:
 
 
 def fit_candidate_models(name, cfg, X, y, m):
-    """One binary model per candidate j: target 1[y <= j]."""
     models, one_class = [], 0
     for j in range(m):
         mod, oc = fit_binary(name, cfg, X, (y <= j).astype(int))
@@ -86,16 +69,12 @@ def fit_candidate_models(name, cfg, X, y, m):
 
 
 def predict_candidates(models, X) -> np.ndarray:
-    """(n, M) probabilities with monotonicity enforced by a cumulative max."""
     P = np.stack([proba1(mod, X) for mod in models], axis=1)
     return np.maximum.accumulate(P, axis=1)
 
 
-# -------------------------------------------------------- decision rule -----
-
+# Cheapest candidate with P >= tau, or the highest one if none qualifies.
 def choose(P: np.ndarray, tau: float):
-    """Cheapest candidate with P >= tau; if none, the highest candidate
-    (approved gap resolution 1). Returns (choice index, fallback mask)."""
     ok = P >= tau - 1e-12
     any_ok = ok.any(axis=1)
     first = np.argmax(ok, axis=1)
@@ -104,10 +83,6 @@ def choose(P: np.ndarray, tau: float):
 
 
 def calibrate_tau(P, quality_by_cand, target, step=0.001):
-    """Smallest tau on a `step` grid whose policy quality (mean over queries
-    of quality_by_cand[i, choice_i]) >= target. quality_by_cand is the per-
-    query success indicator (per-query contract) or recall (mean contract).
-    Returns (tau, achieved quality) or (None, best achievable)."""
     taus = np.round(np.arange(0, 1 + step / 2, step), 10)
     idx = np.arange(len(P))
     best = -1.0
@@ -121,8 +96,6 @@ def calibrate_tau(P, quality_by_cand, target, step=0.001):
 
 
 def select_family(rows, tie_rel, order):
-    """rows: list of dicts with name, cost, feasible. Lowest cost among
-    feasible; candidates within tie_rel (relative) of the best -> simplest."""
     feas = [r for r in rows if r["feasible"]]
     if not feas:
         return None
@@ -130,8 +103,6 @@ def select_family(rows, tie_rel, order):
     near = [r for r in feas if r["cost"] <= best * (1 + tie_rel) + 1e-12]
     return sorted(near, key=lambda r: order.index(r["name"]))[0]["name"]
 
-
-# ---------------------------------------------------- B1 two-ef mixture ------
 
 def fnv1a64(s: str) -> int:
     h = 1469598103934665603
@@ -148,13 +119,10 @@ def splitmix64(x: int) -> int:
 
 
 def mix_uniform(query_set_id: str, row: int, seed: int) -> float:
-    """u in [0,1): splitmix64(fnv1a64("<query_set_id>:<row>") XOR seed) / 2^64."""
     return splitmix64(fnv1a64(f"{query_set_id}:{row}") ^ seed) / 2.0 ** 64
 
 
 def two_ef_mix(level_by_ef, grid, target):
-    """Bracketing grid ef values and weight on the upper one so the expected
-    train quality equals `target` exactly (w = 1 if a grid ef hits it)."""
     ok = np.where(level_by_ef >= target - 1e-12)[0]
     if len(ok) == 0:
         return None
@@ -170,8 +138,6 @@ def assign_mix(mix, rows, query_set_id, seed):
     u = np.array([mix_uniform(query_set_id, int(r), seed) for r in rows])
     return np.where(u < mix["w_hi"], mix["ef_hi"], mix["ef_lo"])
 
-
-# --------------------------------------------------------------- export -----
 
 def export_binary(model, features):
     if isinstance(model, ConstantModel):
@@ -193,12 +159,10 @@ def export_binary(model, features):
 
 
 def proba_from_export(e, X) -> np.ndarray:
-    """sklearn-free re-implementation of P(t=1|x) from export_binary()."""
     if e["type"] == "constant":
         return np.full(len(X), e["p"])
     if e["type"] == "decision_tree":
-        # sklearn trees cast inputs to float32 before comparing with the
-        # (float64) split thresholds; mirror that exactly.
+        # sklearn trees compare float32 inputs against float64 thresholds; match that.
         X = np.asarray(X, dtype=np.float32).astype(np.float64)
         out = np.empty(len(X))
         for i, x in enumerate(X):

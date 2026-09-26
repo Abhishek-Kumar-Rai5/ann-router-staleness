@@ -1,7 +1,3 @@
-// Ground truth is the component every result depends on, so it is checked
-// against hand-computed answers and an independent naive double-precision
-// full sort, including tie-breaking and thread-count invariance.
-
 #include <gtest/gtest.h>
 #include <omp.h>
 
@@ -29,7 +25,6 @@ ars::FloatMatrix RandomMatrix(std::size_t rows, std::size_t dim,
   return m;
 }
 
-// Reference: full sort of every base point by (double distance, id).
 std::vector<std::int32_t> NaiveKnn(const ars::FloatMatrix& base, const float* q,
                                    std::size_t k) {
   std::vector<std::pair<double, std::int32_t>> all;
@@ -50,31 +45,27 @@ std::vector<std::int32_t> NaiveKnn(const ars::FloatMatrix& base, const float* q,
 }
 
 TEST(SquaredL2, MatchesHandComputedValue) {
-  // dim 19 exercises both the 16-lane body and the scalar tail.
   std::vector<float> a(19, 0.0F);
   std::vector<float> b(19, 0.0F);
   a[0] = 3.0F;
-  b[0] = 0.0F;  // 9
+  b[0] = 0.0F;
   a[17] = 1.0F;
-  b[17] = 5.0F;  // 16
+  b[17] = 5.0F;
   a[18] = -2.0F;
-  b[18] = 1.0F;  // 9
+  b[18] = 1.0F;
   EXPECT_FLOAT_EQ(ars::SquaredL2(a.data(), b.data(), a.size()), 34.0F);
   EXPECT_FLOAT_EQ(ars::SquaredL2(a.data(), a.data(), a.size()), 0.0F);
 }
 
 TEST(BruteForceKnn, HandBuiltOneDimensionalCase) {
-  // Points on a line at 0,10,3,7,1; query at 2 -> distances 4,64,1,25,1.
   const ars::FloatMatrix base{{0, 10, 3, 7, 1}, 5, 1};
   const ars::FloatMatrix q{{2}, 1, 1};
   const ars::KnnResult r = ars::BruteForceKnn(base, q, 4);
-  // Tie between ids 2 and 4 at distance 1 -> smaller id first.
   EXPECT_EQ(r.ids.data, (std::vector<std::int32_t>{2, 4, 0, 3}));
   EXPECT_EQ(r.dists.data, (std::vector<float>{1, 1, 4, 25}));
 }
 
 TEST(BruteForceKnn, DuplicatePointsTieBreakBySmallerId) {
-  // Five identical points: any k of them are equidistant; expect ids 0..k-1.
   const ars::FloatMatrix base{std::vector<float>(5 * 3, 1.0F), 5, 3};
   const ars::FloatMatrix q{{0, 0, 0}, 1, 3};
   const ars::KnnResult r = ars::BruteForceKnn(base, q, 3);
@@ -82,9 +73,6 @@ TEST(BruteForceKnn, DuplicatePointsTieBreakBySmallerId) {
 }
 
 TEST(BruteForceKnn, MatchesNaiveSortOnIntegerData) {
-  // Integer data (like SIFT): float sums are exact, so ids must match the
-  // double-precision reference exactly, ties included. Sizes cross both block
-  // boundaries (32 queries, 2048 base rows).
   const auto base = RandomMatrix(5000, 24, 1, /*integer_valued=*/true);
   const auto queries = RandomMatrix(70, 24, 2, /*integer_valued=*/true);
   const std::size_t k = 50;
@@ -101,9 +89,9 @@ TEST(BruteForceKnn, MatchesNaiveSortOnIntegerData) {
   }
 }
 
+// With real-valued data, float vs double rounding can swap near-ties, so this
+// compares sets and distances rather than exact order.
 TEST(BruteForceKnn, MatchesNaiveSortOnGaussianData) {
-  // Real-valued data: float vs double rounding could in principle swap
-  // near-ties, so compare as sets and require the distances to agree.
   const auto base = RandomMatrix(3000, 32, 3, /*integer_valued=*/false);
   const auto queries = RandomMatrix(40, 32, 4, /*integer_valued=*/false);
   const std::size_t k = 10;

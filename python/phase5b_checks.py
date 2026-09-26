@@ -1,6 +1,5 @@
-"""Phase 5'(b) real-data validation V1-V11, exactly as pre-declared in docs/notes.md
-("Phase 5'(b) real-data — PRE-DECLARATION"). Read-only over the runs listed in
-run_manifest.json. Any failure means STOP and report; nothing here repairs anything.
+"""Phase 5'(b) real-data validation V1-V11, as pre-declared in docs/notes.md.
+Read-only: a failure means stop and report, nothing gets repaired here.
 
 Usage: python python/phase5b_checks.py configs/phase5/sift1m.yaml
 """
@@ -40,7 +39,6 @@ def strip_first_col(p):
 
 
 def hnsw_header(p):
-    """hnswlib saveIndex header: offsetLevel0_, max_elements_, cur_element_count."""
     with open(p, "rb") as f:
         _, max_el, cur = struct.unpack("<QQQ", f.read(24))
     return max_el, cur
@@ -61,7 +59,6 @@ def main() -> int:
         R["checks"][name] = {"pass": bool(ok), **kw}
         print(f"{name}: {'PASS' if ok else 'FAIL'}", flush=True)
 
-    # ---- V1 provenance ------------------------------------------------------------
     cur = {"data_sha256": {k: sha(D[k]) for k in ("base", "pool", "queries")},
            "order_sha256": {k: sha(root / f"order_{k}.csv") for k in ("id", "ood", "del")},
            "plan_sha256": sha(sys.argv[1])}
@@ -69,7 +66,6 @@ def main() -> int:
     ok &= P["seeds"] == {"id_order": 20261008, "deletion": 20261009, "ood_anchor": 20261010}
     put("V1_provenance", ok, recorded=cur, seeds=P["seeds"])
 
-    # ---- V5 (orders) nestedness of the constructions -------------------------------
     o_id = pd.read_csv(root / "order_id.csv")["row"].to_numpy()
     o_ood = pd.read_csv(root / "order_ood.csv")["row"].to_numpy()
     o_del = pd.read_csv(root / "order_del.csv")["row"].to_numpy()
@@ -85,13 +81,11 @@ def main() -> int:
                                        and len(set(o_del)) == len(o_del))}
     overlap_id_ood = {c: len(set(o_id[:c]) & set(o_ood[:c])) / c for c in counts}
 
-    # ---- per seed ------------------------------------------------------------------
-    gt_ref = {}  # (traj, count) -> numpy GT (independent of the index seed)
+    gt_ref = {}
     overlap = {}
     for seed in seeds:
         S = M["seeds"][seed]["states"]
         st_names = [n for n in S if n != "S0"]
-        # V2 S0 reproduction
         can, via = S["S0"], M["seeds"][seed]["s0_via_state"]
         v2 = {"curves": Path(can["oracle_run"], "oracle_curves.csv").read_bytes()
               == Path(via["oracle_run"], "oracle_curves.csv").read_bytes(),
@@ -99,10 +93,6 @@ def main() -> int:
               == strip_first_col(Path(via["oracle_run"], "oracle_labels.csv")),
               "features": strip_first_col(Path(can["features_run"], "features.csv"))
               == strip_first_col(Path(via["features_run"], "features.csv"))}
-        # Reported alongside the literal V2 (docs/notes.md "V2 deviation"): the 9
-        # shared columns vs the Phase 3 canonical file, and the full file vs the
-        # Phase 4b-era re-run that added two LID-probe output columns. Pending the
-        # user's decision; the literal V2 still decides pass/fail.
         a = pd.read_csv(Path(can["features_run"], "features.csv"), dtype=str)
         b = pd.read_csv(Path(via["features_run"], "features.csv"), dtype=str)
         shared = [c for c in a.columns if c != "experiment_id"]
@@ -113,23 +103,16 @@ def main() -> int:
         v2["features_identical_to_phase4b_era_rerun"] = (
             strip_first_col(Path(ext, "features.csv")) == strip_first_col(Path(via["features_run"], "features.csv")))
         v2["phase4b_era_rerun"] = ext
-        # V2 decision (user-approved 2026-10-04, docs/notes.md): the literal
-        # features criterion fails only through pre-existing schema evolution
-        # (two LID-probe output columns added in Phase 4b). V2 PASSES iff the
-        # oracle part is byte-identical AND the 9 shared Phase-3 columns are
-        # identical AND the full file equals the Phase-4b-era S0 re-run.
         v2["features_literal_pre_declared"] = v2["features"]
         approved = (v2["curves"] and v2["labels"] and v2["features_shared_columns_identical"]
                     and v2["features_identical_to_phase4b_era_rerun"])
         v2["rule"] = "approved interpretation 2026-10-04 (pre-existing schema evolution)"
         put(f"V2_S0_reproduction_seed{seed}", approved, **v2)
 
-        # V3 in-process S0 byte identity
         v3 = {t: json.loads((Path(M["seeds"][seed]["evolve"][t]) / "metadata.json").read_text())
               ["in_process_s0_byte_identical"] for t in ("id", "ood")}
         put(f"V3_rebuilt_S0_identical_seed{seed}", all(v3.values()), **v3)
 
-        # V4 sizes / counts, V8 deletion exclusion (ars_check_state)
         v4, v8 = [], []
         for name in st_names:
             st, spec = S[name], S[name]["spec"]
@@ -156,7 +139,6 @@ def main() -> int:
         put(f"V4_sizes_counts_seed{seed}", all(x["ok"] for x in v4), states=v4)
         put(f"V8_deleted_exclusion_seed{seed}", all(x["ok"] for x in v8), states=v8)
 
-        # V5 (files) inserted vectors / deleted lists are the order prefixes
         v5f = []
         for traj, order in (("id", o_id), ("ood", o_ood)):
             ins = L.read_fvecs(S[f"{traj}_{counts[-1]}"]["spec"]["inserted_vectors"])
@@ -168,7 +150,6 @@ def main() -> int:
             lab = pd.read_csv(S[f"del_{c}"]["spec"]["deleted_labels"])["label"].to_numpy()
             v5f.append({"traj": f"del_{c}", "ok": bool(np.array_equal(lab, o_del[:c]))})
 
-        # V7 ground truth vs NumPy (all queries); overlap for V5 monotonicity
         gt0_i, _ = gt_of(S["S0"]["oracle_run"])
         top0 = [set(r[:10]) for r in gt0_i]
         v7 = []
@@ -215,7 +196,6 @@ def main() -> int:
         ok5 = all(v5.values()) and all(x["ok"] for x in v5f) and all(m["violations"] == 0 for m in mono.values())
         put(f"V5_nestedness_seed{seed}", ok5, orders=v5, files=v5f, overlap_monotonicity=mono)
 
-        # V6 index reproducibility (separate ars_evolve re-run)
         v6 = []
         for traj in ("id", "ood", "del"):
             m1 = json.loads((Path(M["seeds"][seed]["evolve"][traj]) / "metadata.json").read_text())
@@ -226,12 +206,10 @@ def main() -> int:
                 S[f"{traj}_{a['count']}"]["index_sha256"] = h1
         put(f"V6_index_reproducibility_seed{seed}", all(x["ok"] for x in v6), states=v6)
 
-        # V9 feature reproducibility
         v9 = [{"state": n, "ok": strip_first_col(Path(S[n]["features_run"], "features.csv"))
                == strip_first_col(Path(S[n]["features_repro"], "features.csv"))} for n in st_names]
         put(f"V9_feature_reproducibility_seed{seed}", all(x["ok"] for x in v9), states=v9)
 
-        # V11 query identity / seeds / completeness / config hashes
         v11 = []
         for name in ["S0"] + st_names:
             st = S[name]
@@ -249,7 +227,6 @@ def main() -> int:
             v11.append({"state": name, "config_sha256_16": cfg_h, "ok": bool(ok)})
         put(f"V11_query_seed_config_identity_seed{seed}", all(x["ok"] for x in v11), states=v11)
 
-    # ---- V10 oracle reproducibility --------------------------------------------------
     v10 = []
     for seed, name in P["oracle_repro"]:
         st = M["seeds"][str(seed)]["states"][name]
@@ -263,7 +240,6 @@ def main() -> int:
                     "fresh_gt_identical": bool(gt_ok), "ok": cur_ok and lab_ok and gt_ok})
     put("V10_oracle_reproducibility", all(x["ok"] for x in v10), runs=v10)
 
-    # cross-seed GT consistency (GT is independent of the index seed)
     xs = []
     for name in [n for n in M["seeds"][seeds[0]]["states"] if n != "S0"]:
         g = [gt_of(M["seeds"][s]["states"][name]["oracle_run"]) for s in seeds]

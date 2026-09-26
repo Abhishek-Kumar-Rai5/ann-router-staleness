@@ -1,8 +1,5 @@
-"""Phase 5' orchestration (design_doc.md Addendum A1). Drives the C++ tools
-from YAML: data/orders -> S0 (legacy path) -> ars_evolve (ID / OOD / deletion)
--> unchanged ars_oracle + ars_features on every state (via the `state:`
-config section) -> "S0 through the state path" for the C5 regression check.
-Writes <state_root>/run_manifest.json listing every run directory.
+"""Runs the Phase 5' synthetic pipeline: builds S0, evolves it, then runs the oracle
+and features on every state.
 
 Usage: python python/phase5_run.py configs/phase5/synthetic.yaml
 """
@@ -144,17 +141,14 @@ def main() -> int:
         sd = root / f"seed{seed}"
         m = {"states": {}}
         cfgdir = sd / "configs"
-        # S0, legacy path (builds and caches S0 for this seed).
         o = run("ars_oracle", oracle_cfg(P, seed, "S0", None), cfgdir / "oracle_S0.yaml")
         f = run("ars_features", features_cfg(P, seed, "S0", None), cfgdir / "features_S0.yaml")
         s0_index = json.loads((Path(o) / "metadata.json").read_text())["index"]["cache_path"]
         m["states"]["S0"] = {"oracle_run": o, "features_run": f, "index": s0_index}
-        # C5: S0 through the state path must equal the legacy path.
         st = {"name": f"S0viaState_seed{seed}", "index_path": s0_index}
         m["s0_via_state"] = {
             "oracle_run": run("ars_oracle", oracle_cfg(P, seed, "S0viaState", st), cfgdir / "oracle_S0viaState.yaml"),
             "features_run": run("ars_features", features_cfg(P, seed, "S0viaState", st), cfgdir / "features_S0viaState.yaml")}
-        # State production.
         for traj, kind, cnts in (("id", "insert", counts), ("ood", "insert", counts), ("del", "delete", dcounts)):
             ecfg = f"""experiment_name: phase5_evolve_{traj}_seed{seed}
 {s0_block(P, seed)}evolution:

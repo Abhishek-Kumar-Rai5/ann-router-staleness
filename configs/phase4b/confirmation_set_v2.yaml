@@ -1,19 +1,6 @@
-# Phase 4b confirmation query set v2 (approved corrected Option A, 2026-10-02).
-# Replaces the rejected v1 (configs/phase4b/confirmation_set_v1_REJECTED.yaml).
-# Created after the routers were frozen
-# (results/phase4b_train_311634ee3011_20261002T145649Z); used once.
-#
-# Procedure (fixed BEFORE drawing):
-#  1. Eligible population = rows of sift_learn in ascending row order, EXCLUDING
-#     every row whose vector is a byte-exact copy of any of the 10,000 original
-#     SIFT queries, and keeping each distinct remaining vector once (its lowest
-#     sift_learn row), so the sample cannot contain internal exact duplicates.
-#  2. Fisher-Yates over population POSITIONS 0..N-1 with std::mt19937_64(seed)
-#     and rejection-sampled bounded integers (ars::MakeQuerySplit, as for the
-#     train/test split); the first 2,000 positions are selected; output in
-#     ascending sift_learn row order.
-#  The seed is applied to the FILTERED population. Seed 20261007 is new (never
-#  used before; 20261005 = rejected v1, 20261006 = B1 hash).
+# Confirmation query set v2, drawn once after the routers were frozen. It drops
+# exact copies of the original SIFT queries and keeps each distinct vector once.
+# Never regenerate it with different settings.
 experiment_name: phase4b_confirmation_set_v2
 source: data/sift/sift_learn.fvecs
 exclude_exact_duplicates_of: [data/sift/sift_query.fvecs]

@@ -1,11 +1,4 @@
-"""Phase 5'(a) synthetic validation checks, exactly as pre-declared in
-docs/notes.md ("Phase 5'(a) synthetic validation — PRE-DECLARATION").
-
-C1 update fraction exact        C2 nested monotonicity of top-10 overlap
-C3 drift OOD > ID               C4 ground truth independently verified; deleted
-                                   labels never in GT or in any search result
-C5 S0 via state path == legacy  C6 OOD locality: Spearman(dist to anchor, decay) < 0
-Descriptive: local-density drift, feature-oracle Spearman per state.
+"""Phase 5'(a) synthetic validation checks C1-C6, exactly as pre-declared in docs/notes.md.
 
 Usage: python python/phase5_checks.py configs/phase5/synthetic.yaml
 """
@@ -77,7 +70,6 @@ def main() -> int:
         top0 = [set(r[:10]) for r in gt0_i]
         f0 = pd.read_csv(Path(S["S0"]["features_run"]) / "features.csv").sort_values("query_id")
 
-        # ---- C1 ---------------------------------------------------------------
         c1 = []
         for name, st in S.items():
             if name == "S0":
@@ -91,7 +83,6 @@ def main() -> int:
             c1.append({"state": name, "fraction": frac, "ok": abs(frac - target) < 1e-12})
         rep["checks"][f"C1_seed{seed}"] = {"pass": all(x["ok"] for x in c1), "states": c1}
 
-        # ---- C2 + C4 + overlap -------------------------------------------------
         overlap = {}
         c4 = []
         for name, st in S.items():
@@ -133,7 +124,6 @@ def main() -> int:
                         "mean_overlap": [float(x.mean()) for x in seq]}
         rep["checks"][f"C2_seed{seed}"] = {"pass": all(v["violations"] == 0 for v in c2.values()), **c2}
 
-        # ---- C3 -----------------------------------------------------------------
         mu0 = base.astype(np.float64).mean(0)
         scale = np.sqrt(np.trace(np.cov(base.astype(np.float64), rowvar=False)))
         c3 = []
@@ -146,7 +136,6 @@ def main() -> int:
             c3.append({"count": c, "D_id": dvals["id"], "D_ood": dvals["ood"], "ok": dvals["ood"] > dvals["id"]})
         rep["checks"][f"C3_seed{seed}"] = {"pass": all(x["ok"] for x in c3), "levels": c3}
 
-        # ---- C5 -----------------------------------------------------------------
         lo, so = S["S0"]["oracle_run"], m["s0_via_state"]["oracle_run"]
         lf, sf = S["S0"]["features_run"], m["s0_via_state"]["features_run"]
         same_curves = Path(lo, "oracle_curves.csv").read_bytes() == Path(so, "oracle_curves.csv").read_bytes()
@@ -163,7 +152,6 @@ def main() -> int:
                                            "labels_identical": same_labels, "features_identical": same_feats,
                                            "all_states_complete_no_nan": nan_ok}
 
-        # ---- C6 -----------------------------------------------------------------
         a = pool[M["anchor_pool_row"]].astype(np.float64)
         dq = np.sqrt(((Q.astype(np.float64) - a) ** 2).sum(1))
         rng = np.random.default_rng(20261002)
@@ -181,7 +169,6 @@ def main() -> int:
                        "spearman_id_descriptive": float(rid), "ok": bool(hi_ < 0)})
         rep["checks"][f"C6_seed{seed}"] = {"pass": all(x["ok"] for x in c6), "levels": c6}
 
-        # ---- descriptive ------------------------------------------------------------
         desc = {}
         for name, st in S.items():
             fe = pd.read_csv(Path(st["features_run"]) / "features.csv").sort_values("query_id")

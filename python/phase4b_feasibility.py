@@ -1,15 +1,5 @@
-"""Phase 4b ex-ante feasibility report — TRAINING SPLIT ONLY (frozen contract,
-docs/phase4_bias_audit.md §10 "Feasibility").
-
-Per index seed and operating point: perfect-information mean cost over (a) the
-full ef grid and (b) the frozen candidate ladder, both with the primary fully
-additive probe accounting (probe result = ef 10 answer at probe cost only),
-versus B1 = train-calibrated two-ef mix reaching the target exactly (expected
-cost on train). Classification per the frozen rule:
-  full-grid saving < 10%                  -> FAIL_NO_HEADROOM at that level
-  ladder < 10% while full grid >= 10%     -> STOP_FOR_REVIEW (candidate-set defect)
-  otherwise                               -> OK
-No level is discarded. No model is fitted. No evaluation-set row is read.
+"""Checks, before any evaluation, whether a router could save enough cost to be worth
+testing. Training split only; no model is fitted.
 
 Usage: python python/phase4b_feasibility.py <oracle_run_seed42> <features_run_seed42> \
           <oracle_run_seed43> <features_run_seed43> <oracle_run_seed44> <features_run_seed44>
@@ -28,14 +18,13 @@ import redesign_evidence_train as RE  # noqa: E402
 import router_lib as rl  # noqa: E402
 import validate_audit_train as V  # noqa: E402
 
-LADDER = [20, 40, 83, 164, 327, 647, 1343, 2661]   # + "probe" (frozen)
+LADDER = [20, 40, 83, 164, 327, 647, 1343, 2661]
 S_LEVELS = [0.90, 0.95, 0.99]
 R_LEVELS = [0.95, 0.97, 0.99]
-TARGET = 0.95       # per-query: tie-aware recall@10 == 1.0 (>= 0.95 at k=10)
+TARGET = 0.95
 
 
 def two_ef_mix(level_by_ef: np.ndarray, cost_by_ef: np.ndarray, grid, target):
-    """Expected cost of the fixed two-ef mix reaching `target` exactly."""
     ok = np.where(level_by_ef >= target - 1e-12)[0]
     j = int(ok[0])
     if j == 0 or level_by_ef[j] == target:

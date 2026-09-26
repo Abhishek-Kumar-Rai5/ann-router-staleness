@@ -1,18 +1,6 @@
-"""Shared router training / evaluation logic (Phase 4).
-
-Pure functions on DataFrames so that every piece of routing and evaluation
-logic is unit-tested (python/tests/test_router_lib.py). Definitions follow
-the Phase 4 pre-registration in docs/notes.md.
-
-Conventions
-  tiers      ordered ("low", "med", "high") -> frozen ef values from
-             derived/sift1m_s0_effort_tiers.json (18 / 48 / 327).
-  curves     per-query search curves: DataFrame indexed by query_id with
-             MultiIndex-free wide tables recall[q, ef] and dc[q, ef].
-  cost       router total cost = probe distance computations + search
-             distance computations at the chosen ef. Fixed-ef baselines and
-             the oracle pay no probe.
-  failure    tie-aware recall@10 < target (0.95).
+"""Phase 4 router training and evaluation helpers, kept as pure functions so they
+can be unit-tested. Router cost is probe cost plus search cost at the chosen ef;
+fixed-ef baselines and the oracle pay no probe.
 """
 
 from __future__ import annotations
@@ -35,18 +23,14 @@ CORE_FEATURES = ["knn_dist", "centroid_dist", "score_concentration"]
 LID_FEATURE = "lid"
 TOL = 1e-9
 
-# Simplicity order used for tie-breaking (fewest parameters first).
 SIMPLICITY = ["DT2", "DT3", "LR", "DT4"]
 
 
-# --------------------------------------------------------------- data ------
-
 @dataclass
 class Curves:
-    """Wide per-query curves: rows = query_id, columns = ef."""
-    recall: pd.DataFrame          # tie-aware recall@10
-    recall_id: pd.DataFrame       # id-based recall@10
-    dc: pd.DataFrame              # search distance computations
+    recall: pd.DataFrame
+    recall_id: pd.DataFrame
+    dc: pd.DataFrame
 
     def lookup(self, query_ids, efs):
         q = np.asarray(query_ids)
@@ -60,8 +44,8 @@ class Curves:
                 self.dc.to_numpy()[rows, cols])
 
 
+# Only rows from the requested split are kept, so the other split can't leak in.
 def load_curves(oracle_curves_csv, split: str) -> Curves:
-    """Curves for ONE split only; rows of the other split are never kept."""
     df = pd.read_csv(oracle_curves_csv)
     df = df[df["split"] == split]
     assert set(df["split"]) == {split}
@@ -72,8 +56,6 @@ def load_curves(oracle_curves_csv, split: str) -> Curves:
 
 
 def load_split_frame(features_csv, strata_csv, split: str) -> pd.DataFrame:
-    """Features + tier label + difficulty for ONE split. The other split's
-    rows are dropped before the merge, so they cannot reach the caller."""
     f = pd.read_csv(features_csv)
     s = pd.read_csv(strata_csv)
     f = f[f["split"] == split]
@@ -92,8 +74,6 @@ def sha256_file(path) -> str:
     return h.hexdigest()
 
 
-# ------------------------------------------------------------- models ------
-
 def make_candidate(name: str, seed: int):
     if name.startswith("DT"):
         return DecisionTreeClassifier(max_depth=int(name[2:]),
@@ -107,8 +87,6 @@ def make_candidate(name: str, seed: int):
 
 
 def export_model(model, features) -> dict:
-    """Plain-JSON description sufficient to re-evaluate the model without
-    sklearn (used by predict_from_export for independent validation)."""
     if isinstance(model, DecisionTreeClassifier):
         t = model.tree_
         return {"type": "decision_tree", "features": list(features),
@@ -128,7 +106,6 @@ def export_model(model, features) -> dict:
 
 
 def predict_from_export(export: dict, X: np.ndarray) -> np.ndarray:
-    """Independent re-implementation of prediction from export_model() JSON."""
     classes = np.array(export["classes"])
     if export["type"] == "decision_tree":
         out = []
@@ -147,7 +124,6 @@ def predict_from_export(export: dict, X: np.ndarray) -> np.ndarray:
 
 
 def tree_rules(export: dict, node: int = 0, depth: int = 0) -> list[str]:
-    """Human-readable if/else rules of an exported decision tree."""
     pad = "  " * depth
     if export["children_left"][node] == -1:
         v = np.array(export["value"][node])
@@ -163,11 +139,8 @@ def tree_rules(export: dict, node: int = 0, depth: int = 0) -> list[str]:
             + tree_rules(export, export["children_right"][node], depth + 1))
 
 
-# ------------------------------------------------------------ routing ------
-
 def route(pred_tiers, query_ids, probe_dc, curves: Curves, tier_ef: dict,
           target: float) -> pd.DataFrame:
-    """Per-query outcome of a routing decision (one tier per query)."""
     efs = np.array([tier_ef[t] for t in pred_tiers])
     rec, rec_id, dc = curves.lookup(query_ids, efs)
     probe = np.asarray(probe_dc, dtype=float)
@@ -189,8 +162,6 @@ def fixed(query_ids, ef: int, curves: Curves, target: float) -> pd.DataFrame:
 
 
 def fixed_curve(curves: Curves, query_ids, target: float) -> pd.DataFrame:
-    """Mean recall, mean search cost and failure rate of every fixed grid ef
-    on a subset of queries."""
     r = curves.recall.loc[query_ids]
     d = curves.dc.loc[query_ids]
     fails = (r < target - TOL).mean()
@@ -201,14 +172,11 @@ def fixed_curve(curves: Curves, query_ids, target: float) -> pd.DataFrame:
 
 
 def cheapest_fixed_ef(curve: pd.DataFrame, recall: float):
-    """Smallest grid ef whose mean recall >= `recall` (None if unreachable)."""
     ok = curve[curve["mean_recall"] >= recall - TOL]
     return None if ok.empty else int(ok["ef"].iloc[0])
 
 
 def interp_cost_at_recall(curve: pd.DataFrame, recall: float) -> float:
-    """Fixed-ef mean cost at a target mean recall, linearly interpolated
-    between the last grid point below and the first at/above it."""
     c = curve.sort_values("ef").reset_index(drop=True)
     idx = np.where(c["mean_recall"].to_numpy() >= recall - TOL)[0]
     if len(idx) == 0:
@@ -222,9 +190,9 @@ def interp_cost_at_recall(curve: pd.DataFrame, recall: float) -> float:
     return float(d0 + w * (d1 - d0))
 
 
+# Censored queries have unknown oracle effort, so their regret is NaN and they
+# are reported separately.
 def regret(router: pd.DataFrame, oracle_ef, reached, curves: Curves) -> pd.DataFrame:
-    """Per-query routing regret vs the oracle. Censored queries (oracle effort
-    unknown, > max grid ef) get NaN regret and are reported separately."""
     oracle_ef = np.asarray(oracle_ef, dtype=float)
     reached = np.asarray(reached, dtype=bool)
     oracle_dc = np.full(len(router), np.nan)
@@ -240,17 +208,11 @@ def regret(router: pd.DataFrame, oracle_ef, reached, curves: Curves) -> pd.DataF
 
 
 def tier_error(pred_tiers, true_tiers) -> np.ndarray:
-    """Ordinal tier error: > 0 conservative (over-spend), < 0 aggressive."""
     return np.array([TIER_INDEX[p] - TIER_INDEX[t]
                      for p, t in zip(pred_tiers, true_tiers)])
 
 
-# ---------------------------------------------------------- selection ------
-
 def select_candidate(scores: pd.DataFrame, tie_tol: float) -> str:
-    """scores: columns name, score (matched-recall cost ratio), feasible.
-    Pre-registered rule: drop infeasible; best score; within tie_tol of the
-    best -> simplest by SIMPLICITY order."""
     ok = scores[scores["feasible"]]
     if ok.empty:
         raise RuntimeError("no feasible candidate")
@@ -260,11 +222,7 @@ def select_candidate(scores: pd.DataFrame, tie_tol: float) -> str:
                   if n in SIMPLICITY else len(SIMPLICITY))[0]
 
 
-# -------------------------------------------------------- statistics -------
-
 def wilcoxon_paired(a, b) -> dict:
-    """Paired Wilcoxon signed-rank on a - b, with matched-pairs rank-biserial
-    correlation r = (W+ - W-) / (W+ + W-) over non-zero differences."""
     d = np.asarray(a, float) - np.asarray(b, float)
     nz = d[d != 0]
     if len(nz) == 0:
@@ -278,7 +236,6 @@ def wilcoxon_paired(a, b) -> dict:
 
 
 def bootstrap_ci(values, n: int, seed: int, stat=np.mean) -> tuple:
-    """Percentile 95% CI of `stat` over resampled queries (seeded)."""
     v = np.asarray(values, float)
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(v), size=(n, len(v)))

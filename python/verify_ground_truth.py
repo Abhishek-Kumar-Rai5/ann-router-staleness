@@ -1,10 +1,5 @@
-"""Independently verify our brute-force ground truth for SIFT1M.
-
-Two independent checks, neither sharing code with the C++ implementation:
-  1. Compare our top-k ids against the official TEXMEX sift_groundtruth.ivecs.
-  2. For every row where the id lists differ, recompute the distances of both
-     candidate lists in NumPy (float64) and confirm the disagreement is only
-     a tie (equal distances) rather than a wrong answer.
+"""Checks our SIFT1M ground truth against the official TEXMEX file. Any disagreement
+must turn out to be a tie between equally distant points.
 
 Usage:
   python python/verify_ground_truth.py --ours data/cache/gt_S0_<key> \
@@ -62,7 +57,6 @@ def main():
         report[f"top{k}_rows_identical_order"] = exact_rows
         report[f"top{k}_mean_set_overlap"] = float(set_overlap)
 
-    # Tie analysis on every row whose full id list differs.
     differing = np.where((ours_ids != official).any(axis=1))[0]
     max_abs_err_ours = 0.0
     non_tie_rows = []
@@ -71,11 +65,8 @@ def main():
         d_off = sq_dists(base, queries[q], official[q])
         max_abs_err_ours = max(max_abs_err_ours,
                                float(np.abs(d_ours - ours_d[q]).max()))
-        # Same sorted distance profile => the lists differ only by permuting
-        # or swapping equidistant points.
         if not np.allclose(np.sort(d_ours), np.sort(d_off), rtol=0, atol=1e-6):
             non_tie_rows.append(int(q))
-    # Our stored distances must equal float64 recomputation on a sample too.
     for q in range(0, nq, max(1, nq // 200)):
         d = sq_dists(base, queries[q], ours_ids[q])
         max_abs_err_ours = max(max_abs_err_ours, float(np.abs(d - ours_d[q]).max()))

@@ -1,7 +1,5 @@
-"""Descriptive tables for the Phase 4b final report, computed from saved
-evaluation outputs (eval_report.json + per_query_rows.csv). Adds descriptive
-statistics only (medians, percentiles, failure distributions, Spearman of
-features vs grid-oracle ef); it never changes any gate input.
+"""Descriptive tables for the Phase 4b report, built from saved evaluation outputs.
+It never changes any gate input.
 
 Usage: python python/phase4b_report.py <eval_dir> <evaluate.yaml> <mode> > tables.md
 """
@@ -33,7 +31,6 @@ def ci(c, scale=100, sign=True):
     return f"[{f(c[0])}, {f(c[1])}]"
 
 
-# ---- integrity of the per-query table ---------------------------------------
 num = rows.select_dtypes("number")
 dupe = rows.duplicated(["seed", "query_id", "group", "contract", "level"]).sum()
 cnt = rows.groupby(["group", "contract", "level", "seed"]).size()
@@ -42,7 +39,6 @@ p(f"- per-query table: {len(rows)} rows; NaN {int(num.isna().sum().sum())}; "
   f"rows per (group, contract, level, seed): min {cnt.min()}, max {cnt.max()} "
   f"(expected {rep['n_queries']}).\n")
 
-# ---- gate tables ---------------------------------------------------------
 for contract, levels in (("per_query", ["0.9", "0.95", "0.99"]), ("mean_recall", ["0.95", "0.97", "0.99"])):
     for grp in ("primary", "lid_ablation", "single_feature"):
         p(f"\n#### {grp} — {contract}\n")
@@ -65,7 +61,6 @@ for contract, levels in (("per_query", ["0.9", "0.95", "0.99"]), ("mean_recall",
               f"{w['p_value']:.2e} ({w['rank_biserial']:+.3f}) | {'✓' if cr[0] else '✗'} | {'✓' if cr[1] else '✗'} | "
               f"{'✓' if cr[2] else '✗'} | {'✓' if cr[3] else '✗'} | {'**PASS**' if g['pass'] else '**FAIL**'} |")
 
-# ---- per seed (primary) ----------------------------------------------------
 p("\n#### Per seed — primary router\n")
 p("| contract | level | seed | family | τ | B1 mix (lo/hi, w_hi) | router cost | B1 cost | B2 cost | saving vs B1 | router q | B1 q | Δq | McNemar exact p (router-only / B1-only) |")
 p("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -80,7 +75,6 @@ for contract, levels in (("per_query", ["0.9", "0.95", "0.99"]), ("mean_recall",
               f"{d['router_cost']:.0f} | {d['b1_cost']:.0f} | {d['b2_cost']:.0f} | {pct(d['saving_vs_b1'])} | {rq:.4f} | {bq:.4f} | "
               f"{rq - bq:+.4f} | {d['mcnemar_exact_p']:.3g} ({d['mcnemar_router_only_success']}/{d['mcnemar_b1_only_success']}) |")
 
-# ---- descriptive: quality, failures, cost distribution (primary) -----------
 p("\n#### Descriptive — primary router vs B1 (pooled over seeds; query × seed rows)\n")
 p("| contract | level | policy | success | mean R@10 | median R@10 | failures at R=0.9 / 0.8 / ≤0.7 | probe mean | search mean | total p50 / p90 / p99 | fallback |")
 p("|---|---|---|---|---|---|---|---|---|---|---|")
@@ -96,7 +90,6 @@ for (contract, lv), g in rows[rows["group"] == "primary"].groupby(["contract", "
           f"{int((fails == 0.9).sum())} / {int((fails == 0.8).sum())} / {int((fails <= 0.7).sum())} | {probe:.0f} | {search:.0f} | "
           f"{np.percentile(g[cc], 50):.0f} / {np.percentile(g[cc], 90):.0f} / {np.percentile(g[cc], 99):.0f} | {fb} |")
 
-# ---- regret decomposition --------------------------------------------------
 p("\n#### Regret decomposition (mean over seeds; primary router)\n")
 p("| contract | level | avoidable failure | unavoidable failure | overspend on successes (dc) | underspend on failures (dc, not netted) | probe overhead (dc) | contract-oracle cost at realised quality | contract regret (dc) | legacy regret (dc) |")
 p("|---|---|---|---|---|---|---|---|---|---|")
@@ -107,7 +100,6 @@ for contract, levels in (("per_query", ["0.9", "0.95", "0.99"]), ("mean_recall",
           f"{g['overspend_on_successes_mean']:.0f} | {g['underspend_on_avoidable_failures_mean']:.0f} | {g['mean_probe_cost']:.0f} | "
           f"{g['contract_oracle_cost_at_realised_quality']:.0f} | {g['contract_regret']:.0f} | {g['legacy_regret_total_minus_grid_oracle_dc']:.0f} |")
 
-# ---- sensitivities & pure B1 -----------------------------------------------
 p("\n#### Sensitivities (non-gating) and secondary pure-B1\n")
 p("| contract | level | saving vs B1: additive (primary) | shared descent | probe-free | pure B1 ef | pure-B1 cost | pure-B1 quality | router saving vs pure B1 |")
 p("|---|---|---|---|---|---|---|---|---|")
@@ -121,7 +113,6 @@ for contract, levels in (("per_query", ["0.9", "0.95", "0.99"]), ("mean_recall",
         p(f"| {contract} | {lv} | {pct(pt['saving_vs_b1'])} | {pct(pt['sensitivity_shared_descent_saving_vs_b1'])} | "
           f"{pct(pt['sensitivity_probe_free_saving_vs_b1'])} | (per seed in specs) | {bp['cost']:.0f} | {q:.4f} | {pct(bp['saving_router_vs'])} |")
 
-# ---- difficulty strata ------------------------------------------------------
 p("\n#### Difficulty strata (frozen: easy ≤ 18 < medium ≤ 48 < hard; per-seed grid oracle) — primary router\n")
 p("| contract | level | stratum | query×seed n | router cost | B1 cost | router success | B1 success |")
 p("|---|---|---|---|---|---|---|---|")
@@ -131,7 +122,6 @@ for contract, levels in (("per_query", ["0.9", "0.95", "0.99"]),):
             p(f"| {contract} | {lv} | {gname} | {d['n_query_seed']} | {d['router_cost']:.0f} | {d['b1_cost']:.0f} | "
               f"{d['router_success']:.4f} | {d['b1_success']:.4f} |")
 
-# ---- oracles ----------------------------------------------------------------
 p("\n#### Oracle references (kept separate; per seed)\n")
 p("| seed | 1. grid min-ef oracle: reached / censored / mean search dc | 2. candidate oracle: achievable / mean total dc | 3. contract oracle per-query 0.90 / 0.95 / 0.99 (dc) | 3. contract oracle mean-recall 0.95 / 0.97 / 0.99 (dc) | difficulty counts e/m/h |")
 p("|---|---|---|---|---|---|")
@@ -143,7 +133,6 @@ for s, o in rep["oracles"].items():
     p(f"| {s} | {g1['reached']} / {g1['censored']} / {g1['mean_search_cost_reached']:.0f} | {g2['achievable']} / "
       f"{g2['mean_total_cost_achievable']:.0f} | {pq} | {mr} | {dc['easy']}/{dc['medium']}/{dc['hard']} |")
 
-# ---- Spearman (descriptive): features vs grid-oracle ef ---------------------
 p("\n#### Spearman ρ, primary features vs grid-oracle ef on this query set (descriptive)\n")
 p("| seed | knn_dist | centroid_dist | score_concentration | lid |")
 p("|---|---|---|---|---|")

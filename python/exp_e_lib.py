@@ -1,9 +1,4 @@
-"""Experiment E (docs/exp_e_design_freeze_v2.md): pure functions, no I/O side effects.
-
-Section numbers refer to the design freeze. The reference construction reuses the
-frozen Phase-4b code (router4b_lib.two_ef_mix / assign_mix, router_lib.load_curves)
-unchanged.
-"""
+"""Pure helper functions for Experiment E (no file I/O)."""
 
 from __future__ import annotations
 
@@ -19,18 +14,16 @@ import router4b_lib as rb  # noqa: E402
 QUERY_SET_ID = "sift_query"
 B1_HASH_SEED = 20261006
 TARGET = 0.95
-M1, M2 = 0.10, 0.05          # H-E1 / H-E2 margins (frozen)
+M1, M2 = 0.10, 0.05  # frozen H-E1 / H-E2 margins
 B, BOOT_SEED = 2000, 20261002
 PASS_TOL = 1e-9
-SMALL_N = 30                 # H-E4 small-n flag
+SMALL_N = 30
 EIGHT_PCT_OOD = ("At 8% insertion magnitude, the available pool forces the regional-OOD construction "
                  "to overlap approximately 91% with the matched ID set, so this level does not provide "
                  "a clean ID-vs-OOD comparison.")
 
 
-# ---- §3 / §5: policies -----------------------------------------------------------------
 def ref_mix(train_curves):
-    """§5: Phase-4b mean-recall two-ef mix on mean training tie-aware recall."""
     grid = [int(e) for e in train_curves.recall.columns]
     level = train_curves.recall.to_numpy().mean(0)
     return rb.two_ef_mix(level, grid, TARGET)
@@ -49,7 +42,6 @@ def is_pass(recall_tie_aware):
     return np.asarray(recall_tie_aware) >= 1 - PASS_TOL
 
 
-# ---- §10: bootstrap ---------------------------------------------------------------------------
 def boot_index(n):
     return np.random.default_rng(BOOT_SEED).integers(0, n, size=(B, n))
 
@@ -60,13 +52,10 @@ def ci95(a):
 
 
 def rep_mean(x, idx):
-    """Mean of x over each bootstrap replicate (rows of idx)."""
     return np.asarray(x, float)[idx].mean(1)
 
 
-# ---- §6: H-E1 -------------------------------------------------------------------------------
 def d_stat(cp, cr, cp0, cr0):
-    """§6.2: D = [cp/cr] / [cp0/cr0] - 1 (all arguments are mean costs, scalars or arrays)."""
     return (np.asarray(cp) / np.asarray(cr)) / (np.asarray(cp0) / np.asarray(cr0)) - 1
 
 
@@ -97,7 +86,6 @@ def classify_e(ci, m=M2):
 
 
 def family_verdict(classes):
-    """§6.4 / §7.3 intersection rule (unchanged)."""
     if all(c == "STABLE" for c in classes):
         return "STABLE-FAMILY"
     if any(c.startswith("STALE") for c in classes):
@@ -105,9 +93,7 @@ def family_verdict(classes):
     return "INCONCLUSIVE-FAMILY"
 
 
-# ---- §7: H-E2 -------------------------------------------------------------------------------
 def nf_rate(cohort, fail_s, idx=None):
-    """§7.2: share of the S0-pass cohort failing at s (denominator = cohort size)."""
     cohort = np.asarray(cohort, bool)
     hit = cohort & np.asarray(fail_s, bool)
     if idx is None:
@@ -121,9 +107,7 @@ def transitions(pass0, pass_s):
             "stable_fail": int((~p0 & ~ps).sum()), "improved": int((~p0 & ps).sum())}
 
 
-# ---- §8: H-E3 ---------------------------------------------------------------------------------
 def spearman_rows(x, y):
-    """Row-wise Spearman between two (R, n) arrays (average ranks); nan if a row is constant."""
     rx = stats.rankdata(np.atleast_2d(x), axis=1)
     ry = stats.rankdata(np.atleast_2d(y), axis=1)
     rx = rx - rx.mean(1, keepdims=True)
@@ -141,7 +125,6 @@ def boot_p_two_sided(reps):
 
 
 def holm(pvals, alpha=0.05):
-    """Holm–Bonferroni: returns adjusted p-values (same order) and reject flags."""
     p = np.asarray(pvals, float)
     order = np.argsort(p, kind="stable")
     m = len(p)
@@ -153,7 +136,6 @@ def holm(pvals, alpha=0.05):
     return adj, adj < alpha
 
 
-# ---- §9: H-E4 ---------------------------------------------------------------------------------
 def h_e4(stopped, pred, real, idx=None):
     s = np.asarray(stopped, bool)
     err = np.asarray(pred, float) - np.asarray(real, float)
@@ -169,9 +151,7 @@ def h_e4(stopped, pred, real, idx=None):
         return {"bias": (err[idx] * sw).sum(1) / n, "mace": (np.abs(err)[idx] * sw).sum(1) / n}
 
 
-# ---- §11: mixed-effects ------------------------------------------------------------------------
 def mixedlm_trend(df, outcome):
-    """y ~ L + T + L:T, groups = seed, random intercept, REML. Returns a dict (never raises)."""
     import warnings
 
     import statsmodels.formula.api as smf
@@ -192,13 +172,12 @@ def mixedlm_trend(df, outcome):
             "changes_with_magnitude": bool(ci.loc["L", 0] > 0 or ci.loc["L", 1] < 0),
             "descriptive_only_terms": ["T", "L:T"],
         })
-    except Exception as e:  # §11: report failure, never substitute another model
+    except Exception as e:
         out.update({"fit_failed": True, "error": repr(e)[:500]})
     return out
 
 
 def ols_slope(x, y):
-    """Least-squares slope of y on x; y may be (R, n) for replicates."""
     x = np.asarray(x, float)
     y = np.atleast_2d(np.asarray(y, float))
     xc = x - x.mean()

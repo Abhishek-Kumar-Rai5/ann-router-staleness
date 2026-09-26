@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)  # add_subdirectory(... SYSTEM)
+cmake_minimum_required(VERSION 3.25)  # 3.25 is needed for add_subdirectory(... SYSTEM)
 project(ann_router_staleness LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -12,21 +12,17 @@ endif()
 
 option(ARS_BUILD_TESTS "Build GoogleTest unit tests" ON)
 option(ARS_ENABLE_CLANG_TIDY "Run clang-tidy on project sources" ON)
-# -march=native enables hnswlib's AVX/AVX-512 distance kernels. The effective
-# flags are logged into every run's metadata, so results stay attributable.
 option(ARS_NATIVE_ARCH "Compile with -march=native" ON)
 if(ARS_NATIVE_ARCH)
   string(APPEND CMAKE_CXX_FLAGS " -march=native")
 endif()
 
-# clang-tidy: on by default, but degrade gracefully if not installed.
 if(ARS_ENABLE_CLANG_TIDY)
   find_program(CLANG_TIDY_EXE NAMES clang-tidy)
   if(CLANG_TIDY_EXE)
     set(ARS_CLANG_TIDY "${CLANG_TIDY_EXE}")
-    # Point clang-tidy at the libstdc++ of the GCC that actually builds the
-    # project. Otherwise clang picks the newest /usr/lib/gcc/<triple>/<ver>,
-    # which may lack headers (e.g. a gcc-14 runtime without libstdc++-14-dev).
+    # Point clang-tidy at the same GCC that builds the project. Otherwise clang may
+    # pick a newer GCC whose C++ headers aren't installed.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
       execute_process(
         COMMAND ${CMAKE_CXX_COMPILER} -print-libgcc-file-name
@@ -35,7 +31,6 @@ if(ARS_ENABLE_CLANG_TIDY)
       get_filename_component(ARS_GCC_INSTALL_DIR "${ARS_LIBGCC_FILE}" DIRECTORY)
       list(APPEND ARS_CLANG_TIDY
         "--extra-arg=--gcc-install-dir=${ARS_GCC_INSTALL_DIR}")
-    # clang cannot parse GCC's omp.h; it needs its own (libomp-<ver>-dev).
     endif()
   else()
     message(WARNING "clang-tidy not found; static analysis disabled for this build")
@@ -44,12 +39,10 @@ endif()
 
 find_package(OpenMP REQUIRED)
 
-# hnswlib: header-only, used strictly as a black box (CLAUDE.md scope rule).
 add_library(hnswlib INTERFACE)
 target_include_directories(hnswlib SYSTEM INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/hnswlib)
 
-# yaml-cpp: pinned submodule, parses the per-run YAML experiment configs.
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
@@ -62,7 +55,6 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_QUIET)
 
-# Project core library.
 add_library(ars_core
   src/build_info.cpp
   src/config.cpp
@@ -94,7 +86,6 @@ if(ARS_CLANG_TIDY)
   set_target_properties(ars_core PROPERTIES CXX_CLANG_TIDY "${ARS_CLANG_TIDY}")
 endif()
 
-# Experiment drivers (one per phase), each driven by a YAML config.
 add_executable(ars_static_sweep apps/ars_static_sweep.cpp)
 add_executable(ars_oracle apps/ars_oracle.cpp)
 add_executable(ars_features apps/ars_features.cpp)
@@ -112,8 +103,7 @@ foreach(app ars_static_sweep ars_oracle ars_features ars_eval_policy
   endif()
 endforeach()
 
-# Experiment C (design_doc.md Addendum C1): independent DARTH re-implementation.
-# Needs LightGBM v4.6.0 built as a static library in third_party/LightGBM:
+# Experiment C needs LightGBM v4.6.0 built as a static library first:
 #   cmake -S third_party/LightGBM -B third_party/LightGBM/build \
 #         -DBUILD_STATIC_LIB=ON -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release
 #   cmake --build third_party/LightGBM/build -j

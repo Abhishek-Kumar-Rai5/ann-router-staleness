@@ -1,6 +1,3 @@
-// Supporting modules: .fvecs/.ivecs I/O, recall metrics, YAML config parsing
-// and run-metadata helpers.
-
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -34,7 +31,6 @@ TEST(VecsIo, FvecsAndIvecsRoundTrip) {
   EXPECT_EQ(i2.rows, 2U);
   EXPECT_EQ(i2.dim, 3U);
   EXPECT_EQ(i2.data, i.data);
-  // max_rows truncates to a prefix.
   const auto head = ars::ReadFvecs(TempPath("rt.fvecs"), 2);
   EXPECT_EQ(head.rows, 2U);
   EXPECT_EQ(head.data, (std::vector<float>{1.5F, -2, 3, 4}));
@@ -55,8 +51,7 @@ TEST(Metrics, RecallAtKCountsIdOverlap) {
   EXPECT_DOUBLE_EQ(ars::RecallAtK(gt.data(), {5, 3, 9, 1}, 4), 1.0);
   EXPECT_DOUBLE_EQ(ars::RecallAtK(gt.data(), {1, 9, 3, 5}, 4), 1.0);
   EXPECT_DOUBLE_EQ(ars::RecallAtK(gt.data(), {5, 3, 0, 2}, 4), 0.5);
-  EXPECT_DOUBLE_EQ(ars::RecallAtK(gt.data(), {5}, 4), 0.25);  // short result
-  // Only the first k of each list count.
+  EXPECT_DOUBLE_EQ(ars::RecallAtK(gt.data(), {5}, 4), 0.25);
   EXPECT_DOUBLE_EQ(ars::RecallAtK(gt.data(), {0, 5, 3}, 2), 0.5);
 }
 
@@ -65,7 +60,6 @@ TEST(Metrics, TieAwareRecallAcceptsEquidistantSubstitutes) {
   EXPECT_DOUBLE_EQ(ars::TieAwareRecallAtK(gt.data(), {1, 2, 2}, 3), 1.0);
   EXPECT_DOUBLE_EQ(ars::TieAwareRecallAtK(gt.data(), {1, 2, 2.5F}, 3),
                    2.0 / 3.0);
-  // With k=2 the threshold is gt[1]=2, so a different id at distance 2 counts.
   EXPECT_DOUBLE_EQ(ars::TieAwareRecallAtK(gt.data(), {1, 2}, 2), 1.0);
 }
 

@@ -1,6 +1,4 @@
-# Smoke test for the Phase 2 oracle pipeline on a SIFT subsample (< 1 min).
-# §5.3, §7.3, §7.7, §13, §21). dataset/index/ground_truth/paths are identical
-# to configs/phase1_sift1m.yaml, so the cached S0 index and GT are reused.
+# Quick check of the Phase 2 oracle pipeline on a SIFT subsample (under a minute).
 experiment_name: smoke_oracle_sift
 
 dataset:
@@ -22,22 +20,17 @@ paths:
   cache_dir: data/cache
   output_dir: results
 
-# Router train/test split (§7.3). Fixed before any oracle search; depends only
-# on (num_queries, test_size, seed). test_size is the top of the §10 range
-# (~1,000–2,000 test queries); the remaining 8,000 are the training split.
 split:
-  seed: 20261001     # date the split was established; never change
+  seed: 20261001  # the project's fixed split seed; never change it
   test_size: 40
   path: data/cache/smoke_split_200_seed20261001.csv
 
 oracle:
-  k: 10                        # recall@10, as in Phase 1
-  target_recall: 0.95          # §7.7 example value; set from the design doc,
-                               # not from any data
-  recall_definition: tie_aware # Phase 1 finding: id-recall is non-monotone
-                               # only through duplicate-vector ties
-  ef_grid:                     # 10..20 in +1 steps, then ~5% steps
+  k: 10
+  target_recall: 0.95
+  recall_definition: tie_aware
+  ef_grid:
     min: 10
     max: 1024
     ratio: 1.05
-  search_threads: 16           # deterministic; no timing is taken here
+  search_threads: 16

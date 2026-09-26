@@ -1,18 +1,5 @@
-"""Phase 4 test-split evaluation of the FROZEN router (run once).
-
-Loads the routers saved by train_router.py, verifies their SHA-256 against the
-training metadata, and evaluates them on the 2,000 test queries against
-fixed ef 18 / 48 / 327, the matched-recall fixed ef and the oracle, following
-the Phase 4 pre-registration in docs/notes.md. Nothing here feeds back into
-the router: no fitting, no thresholds, no selection.
-
-Outputs in <train_run>/test_eval/:
-  test_rows.csv          one row per test query x policy (all measurements)
-  test_predictions.csv   per-query features, true tier, predictions, leaf
-  policy_<name>.csv      (query_id, ef) for independent C++ re-search
-  eval_report.json       aggregates, paired tests, CIs, regret, confusion,
-                         difficulty groups, censored queries, checkpoint
-  router_vs_fixed.png, router_by_difficulty.png
+"""One-time test-split evaluation of the frozen Phase 4 router. Nothing here feeds
+back into the router: no fitting, no thresholds, no selection.
 
 Usage: python python/evaluate_router.py configs/phase4_router_sift1m.yaml <train_run>
 """
@@ -33,7 +20,6 @@ import yaml  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import router_lib as rl  # noqa: E402
 
-# Categorical slots from the validated reference palette (fixed order).
 C_BLUE, C_ORANGE, C_AQUA, C_YELLOW, C_MAGENTA = (
     "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4")
 INK, INK2, SURFACE = "#0b0b0b", "#52514e", "#fcfcfb"
@@ -55,7 +41,6 @@ def summarize(df: pd.DataFrame, n_boot: int, seed: int) -> dict:
 
 
 def paired(a: pd.DataFrame, b: pd.DataFrame, n_boot: int, seed: int) -> dict:
-    """Paired comparison a - b on the same queries (aligned by query_id)."""
     a = a.set_index("query_id").sort_index()
     b = b.set_index("query_id").loc[a.index]
     d_cost = a["total_dc"] - b["total_dc"]
@@ -84,14 +69,13 @@ def main() -> int:
     cfg = yaml.safe_load(Path(sys.argv[1]).read_text())
     run = Path(sys.argv[2])
     out = run / "test_eval"
-    out.mkdir(exist_ok=False)          # evaluate once; never overwrite
+    out.mkdir(exist_ok=False)  # evaluate once, never overwrite
     meta = json.loads((run / "metadata.json").read_text())
     inp, target = cfg["inputs"], cfg["target_recall"]
     nb, seed = (cfg["evaluation"]["bootstrap_resamples"],
                 cfg["evaluation"]["bootstrap_seed"])
     tier_ef = json.loads(Path(inp["tiers"]).read_text())["fixed_ef_baselines"]
 
-    # Frozen models: verify they are byte-identical to what training saved.
     models = {}
     for role, m in meta["models"].items():
         path = run / m["path"]
@@ -106,7 +90,6 @@ def main() -> int:
     test["probe_plus_lid_dc"] = (test["probe_distance_computations"]
                                  + test["lid_probe_distance_computations"])
 
-    # Predictions (+ independent re-implementation from the JSON export).
     preds, leaves = {}, None
     for role, (model, m) in models.items():
         X = test[m["features"]].to_numpy()
@@ -117,7 +100,6 @@ def main() -> int:
         if role == "primary" and hasattr(model, "apply"):
             leaves = model.apply(X)
 
-    # Per-query rows for every policy.
     pol = {}
     pol["router"] = rl.route(preds["primary"], qids,
                              test["probe_distance_computations"], curves,
@@ -133,8 +115,6 @@ def main() -> int:
     curve = rl.fixed_curve(curves, qids, target)
     matched_ef = rl.cheapest_fixed_ef(curve, pol["router"]["recall"].mean())
     pol[f"fixed_matched_{matched_ef}"] = rl.fixed(qids, matched_ef, curves, target)
-    # Oracle: own ef per query; censored queries searched at the max grid ef,
-    # flagged, and excluded wherever their effort would be read as "required".
     max_ef = int(curves.recall.columns.max())
     o_ef = np.where(test["reached"] == 1, test["oracle_ef"].fillna(max_ef),
                     max_ef).astype(int)
@@ -152,7 +132,6 @@ def main() -> int:
     for k in ("router", "router_single_feature", "router_lid_ablation", "oracle"):
         pol[k][["query_id", "ef"]].to_csv(out / f"policy_{k}.csv", index=False)
 
-    # Regret and tier errors (primary router).
     reg = rl.regret(pol["router"], test["oracle_ef"], test["reached"] == 1, curves)
     terr = rl.tier_error(preds["primary"], test["tier_label"])
     pq = test[["query_id", "difficulty", "censored", "tier_label", "oracle_ef",
@@ -176,15 +155,12 @@ def main() -> int:
            "tiers": tier_ef, "n_test": int(len(test)),
            "censored_query_ids": test.loc[test["censored"], "query_id"].tolist()}
 
-    # 1. Aggregates (all 2,000; and excluding the 2 censored queries).
     unc = test.loc[~test["censored"], "query_id"]
     rep["summary"] = {k: summarize(p, nb, seed) for k, p in pol.items()}
     rep["summary_uncensored"] = {
         k: summarize(p[p["query_id"].isin(unc)], nb, seed) for k, p in pol.items()}
-    # 2. Paired comparisons: router vs every baseline.
     rep["paired_router_vs"] = {k: paired(pol["router"], p, nb, seed)
                                for k, p in pol.items() if k != "router"}
-    # 3. Matched recall on the full fixed-ef curve.
     for k in ("router", "router_single_feature", "router_lid_ablation"):
         r = pol[k]
         cost_fixed = rl.interp_cost_at_recall(curve, r["recall"].mean())
@@ -198,7 +174,6 @@ def main() -> int:
             "fixed_over_router_cost": float(cost_fixed / r["total_dc"].mean()),
             "fixed_over_router_search_only": float(cost_fixed / r["search_dc"].mean()),
         }
-    # 4. Regret (uncensored only) and tier errors.
     ok = ~test["censored"].to_numpy()
     rt, rs = reg["regret_total_dc"].to_numpy()[ok], reg["regret_search_dc"].to_numpy()[ok]
     fail = pol["router"]["failure"].to_numpy()[ok]
@@ -234,7 +209,6 @@ def main() -> int:
         "failure_rate_when_conservative": float(
             pq.loc[pq["error_kind"] == "conservative", "router_failure"].mean()),
     }
-    # 5. Difficulty groups.
     rep["by_difficulty"] = {}
     for g in ("easy", "medium", "hard"):
         ids = test.loc[test["difficulty"] == g, "query_id"]
@@ -251,7 +225,6 @@ def main() -> int:
             "regret_total_dc_mean_uncensored": float(
                 gm.loc[~gm["censored"], "regret_total_dc"].mean()),
         }
-    # 6. Misrouting: which queries, by leaf and by error kind.
     if leaves is not None:
         rep["by_leaf"] = (pq.groupby("leaf").agg(
             n=("query_id", "size"), predicted=("pred_primary", "first"),
@@ -266,14 +239,12 @@ def main() -> int:
         .median().to_dict(orient="index"))
     rep["error_kind_by_true_tier"] = pd.crosstab(
         pq["tier_label"], pq["error_kind"]).to_dict(orient="index")
-    # 7. Censored queries, every policy.
     rep["censored_queries"] = rows[rows["censored"]][
         ["query_id", "policy", "ef", "recall", "recall_id", "total_dc",
          "failure"]].to_dict(orient="records")
     rep["censored_query_features"] = pq[pq["censored"]][
         ["query_id", *rl.CORE_FEATURES, "lid", "pred_primary"]].to_dict(
         orient="records")
-    # 8. Pre-registered checkpoint (router vs matched-recall fixed ef).
     pm = rep["paired_router_vs"][f"fixed_matched_{matched_ef}"]
     crit = {
         "i_cost_lower_ci_below_0_and_p_lt_0.01":
@@ -299,7 +270,6 @@ def main() -> int:
 
 
 def plot(out, pol, curve, rep, tier_ef, matched_ef):
-    """Figures only; reads nothing but already-computed evaluation results."""
     plt.rcParams.update({"axes.edgecolor": INK2, "axes.labelcolor": INK,
                          "xtick.color": INK2, "ytick.color": INK2,
                          "figure.facecolor": SURFACE, "axes.facecolor": SURFACE})
@@ -360,8 +330,6 @@ def plot(out, pol, curve, rep, tier_ef, matched_ef):
 
 
 def replot(cfg, run: Path) -> int:
-    """Redraw figures from saved test_rows.csv / eval_report.json (no
-    re-evaluation; used only to fix figure layout)."""
     out = run / "test_eval"
     rows = pd.read_csv(out / "test_rows.csv")
     rep = json.loads((out / "eval_report.json").read_text())

@@ -1,16 +1,6 @@
-// Phase 2: oracle search effort on the static S0 index.
-//
-// 1. Creates (or re-verifies) the seeded router train/test query split. This
-//    happens first and depends only on (num_queries, test_size, seed).
-// 2. Searches every query at every ef of a fixed grid (parallel over queries;
-//    results are deterministic and identical to single-threaded search).
-// 3. Derives each query's oracle label: the smallest grid ef from which the
-//    target recall holds at every larger grid ef.
-//
-// Writes split.csv, oracle_curves.csv (one row per query x grid ef: the full
-// per-query recall/effort curve, kept for routing-regret analysis),
-// oracle_labels.csv (one row per query) and metadata.json.
-//
+// Finds each query's oracle ef: the smallest grid ef from which the target
+// recall holds at every larger ef. The train/test split is created before any
+// search runs, so no result can influence it.
 // Usage: ars_oracle <config.yaml>
 
 #include <omp.h>
@@ -50,8 +40,6 @@ struct CurvePoint {
   std::uint64_t distance_computations = 0;
 };
 
-// Returns the split, persisting it to cfg.split_path on first use and
-// otherwise verifying the regenerated split matches the stored file exactly.
 std::vector<ars::Split> EstablishSplit(const ars::OracleConfig& cfg,
                                        std::size_t num_queries, bool& created) {
   if (cfg.split_fixed_file) {
@@ -106,7 +94,6 @@ int main(int argc, char** argv) {
     const ars::S0Data data = ars::LoadS0Data(cfg);
     const std::size_t nq = data.queries.rows;
 
-    // Step 1: the split, before any search or label exists.
     bool split_created = false;
     const std::vector<ars::Split> split =
         EstablishSplit(cfg, nq, split_created);
@@ -129,11 +116,10 @@ int main(int argc, char** argv) {
               << (s0.from_cache ? "loaded" : "built") << " (" << s0.index.Size()
               << " elements)\n";
 
-    // Step 2: per-query recall/effort curve over the fixed ef grid.
     const std::vector<std::size_t> grid = ars::GeometricEfGrid(
         cfg.ef_grid_min, cfg.ef_grid_max, cfg.ef_grid_ratio);
     const std::size_t n_ef = grid.size();
-    std::vector<CurvePoint> curve(nq * n_ef);  // [query][grid index]
+    std::vector<CurvePoint> curve(nq * n_ef);
     const auto t_search = Clock::now();
     for (std::size_t e = 0; e < n_ef; ++e) {
       const auto results = s0.index.SearchBatch(data.queries, cfg.k, grid[e],
@@ -150,7 +136,6 @@ int main(int argc, char** argv) {
     std::cerr << "[ars] searched " << n_ef << " ef values (" << grid.front()
               << ".." << grid.back() << ") in " << search_seconds << " s\n";
 
-    // Step 3: labels.
     const bool tie_aware = cfg.recall_definition == "tie_aware";
     std::vector<ars::OracleLabel> labels(nq);
     std::size_t reached = 0;
@@ -201,7 +186,7 @@ int main(int argc, char** argv) {
               << p.distance_computations << "," << p.recall << ","
               << p.recall_tie_aware;
         } else {
-          csv << ",,,,";  // censored: no ef in the grid reaches the target
+          csv << ",,,,";  // censored: no grid ef reaches the target
         }
         csv << "," << grid.back() << "," << top.recall << ","
             << top.recall_tie_aware << "\n";

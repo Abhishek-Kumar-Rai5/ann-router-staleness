@@ -1,21 +1,5 @@
 """Training-split evidence for docs/phase4_redesign.md. Read-only; no model is
-fitted; no test row is read (asserted); nothing canonical is modified.
-
-Per-query contract (success = tie-aware recall@10 >= 0.95, i.e. 10/10):
-  contract oracle at S*: perfect information, a fixed candidate set; every
-  query either succeeds at its cheapest *stably* succeeding candidate or is
-  served at the cheapest candidate (a failure); the ceil(S* n) achievable
-  queries with the smallest extra cost of succeeding are made to succeed.
-  This is the minimum mean cost of ANY policy restricted to those candidates
-  and that accounting, at success rate >= S*.
-Fixed ef at S*: smallest grid ef whose TRAIN success rate >= S*.
-
-Probe accounting variants:
-  additive        probe (= full ef 10 search) + routed search       [primary]
-  descent_shared  additive minus this query's upper-layer descent dc
-                  (descent is ef-independent; measured with the replica)
-  search_only     routed search only (probe free) — optimistic bound
-The candidate "probe" means returning the probe's own ef=10 result.
+fitted and no test row is read.
 
 Usage: python python/redesign_evidence_train.py configs/phase4_router_sift1m.yaml
 """
@@ -38,8 +22,6 @@ R_GRID = [0.95, 0.97, 0.99]
 
 
 def stable_first(success: np.ndarray) -> np.ndarray:
-    """Index of the first candidate from which success holds at every larger
-    candidate; -1 if the last candidate fails (unachievable)."""
     n, m = success.shape
     out = np.full(n, -1)
     ok = success[:, -1].copy()
@@ -61,7 +43,7 @@ def contract_oracle(cost: np.ndarray, success: np.ndarray, s_star: float):
     if achievable.sum() < need:
         return {"feasible": False, "achievable_rate": float(achievable.mean())}
     extra = succ_cost - fail_cost
-    order = np.argsort(extra)  # cheapest-to-satisfy first (inf last)
+    order = np.argsort(extra)
     chosen = np.zeros(n, bool)
     chosen[order[:need]] = True
     total = np.where(chosen, succ_cost, fail_cost)
@@ -86,7 +68,6 @@ def main() -> int:
     probe = train["probe_distance_computations"].to_numpy(float)
     assert np.array_equal(probe, Dm[:, grid.index(10)])
 
-    # Upper-layer descent cost per training query (independent replica).
     meta = json.loads((Path(inp["oracle_run"]) / "metadata.json").read_text())
     idx = V.HnswFile(meta["index"]["cache_path"])
     fcfg = yaml.safe_load((Path(inp["features_run"]) / "config.yaml").read_text())
@@ -105,14 +86,11 @@ def main() -> int:
                 nb = idx.links(cur, level).astype(np.int64)
                 d = ((vec[nb] - qd) ** 2).sum(axis=1)
                 c += len(nb)
-                for cand, dd in zip(nb, d):       # sequential update, as hnswlib
+                for cand, dd in zip(nb, d):  # update one by one, as hnswlib does
                     if dd < best:
                         best, cur, changed = float(dd), int(cand), True
-    # NOTE: the vectorised distances above are computed for all neighbours of
-    # a list (hnswlib evaluates all of them too), so the count is exact.
         descent[t] = c
 
-    # Candidate sets (efs in increasing order). "probe" = ef 10 result.
     ladder = sorted({min(e for e in grid if e >= 10 * 2 ** i)
                      for i in range(1, 20) if any(e >= 10 * 2 ** i for e in grid)})
     sets = {
@@ -133,7 +111,7 @@ def main() -> int:
                 cols.append(probe.copy())
             elif accounting == "additive":
                 cols.append(probe + Dm[:, j])
-            else:  # descent_shared
+            else:
                 cols.append(probe + Dm[:, j] - descent)
         return np.stack(cols, 1), np.stack(succ, 1)
 
@@ -159,7 +137,6 @@ def main() -> int:
                     r["saving_vs_fixed"] = 1 - r["mean_cost"] / f["mean_dc"]
                 out["per_query_contract"].setdefault(name, {}).setdefault(
                     acc, {})[str(s)] = r
-    # Secondary: mean-recall contract (Lagrangian), primary accounting only.
     curve = rl.fixed_curve(curves, q, target)
     for name, cands in sets.items():
         cost, _ = options(cands, "additive")

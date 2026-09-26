@@ -1,8 +1,3 @@
-"""Unit tests for Phase 4 routing / evaluation logic (python/router_lib.py).
-
-Run: .venv/bin/python -m pytest python/tests -q
-"""
-
 import sys
 from pathlib import Path
 
@@ -17,11 +12,10 @@ TIER_EF = {"low": 18, "med": 48, "high": 327}
 
 
 def toy_curves():
-    """3 queries x 4 efs with known recall / cost."""
     efs = [10, 18, 48, 327]
-    rec = pd.DataFrame([[0.5, 0.9, 1.0, 1.0],    # q0: needs 48
-                        [1.0, 1.0, 1.0, 1.0],    # q1: easy
-                        [0.2, 0.4, 0.8, 0.9]],   # q2: never reaches 0.95
+    rec = pd.DataFrame([[0.5, 0.9, 1.0, 1.0],
+                        [1.0, 1.0, 1.0, 1.0],
+                        [0.2, 0.4, 0.8, 0.9]],
                        index=[0, 1, 2], columns=efs)
     dc = pd.DataFrame([[100, 200, 400, 2000]] * 3, index=[0, 1, 2], columns=efs)
     return rl.Curves(recall=rec, recall_id=rec.copy(), dc=dc)
@@ -54,15 +48,12 @@ def test_lookup_rejects_unknown_query_or_ef():
 def test_fixed_curve_matching_and_interpolation():
     c = toy_curves()
     curve = rl.fixed_curve(c, [0, 1, 2], 0.95)
-    # mean recall per ef: 10->0.5667, 18->0.7667, 48->0.9333, 327->0.9667
     assert rl.cheapest_fixed_ef(curve, 0.9) == 48
     assert rl.cheapest_fixed_ef(curve, 0.95) == 327
     assert rl.cheapest_fixed_ef(curve, 0.99) is None
     assert rl.interp_cost_at_recall(curve, 0.99) == float("inf")
-    # Exactly on a grid point -> that point's cost.
     r48 = curve.loc[curve["ef"] == 48, "mean_recall"].iloc[0]
     assert rl.interp_cost_at_recall(curve, r48) == pytest.approx(400)
-    # Halfway between 48 and 327 in recall -> halfway in cost.
     mid = (r48 + curve.loc[curve["ef"] == 327, "mean_recall"].iloc[0]) / 2
     assert rl.interp_cost_at_recall(curve, mid) == pytest.approx(1200)
     assert rl.interp_cost_at_recall(curve, 0.1) == pytest.approx(100)
@@ -73,26 +64,25 @@ def test_regret_signs_and_censoring():
     c = toy_curves()
     routed = rl.route(["high", "low", "high"], [0, 1, 2], [50, 50, 50], c,
                       TIER_EF, 0.95)
-    # q0 oracle ef 48 (cost 400); q1 oracle 10 (100); q2 censored.
     r = rl.regret(routed, [48, 10, np.nan], [True, True, False], c)
-    assert r["regret_search_dc"].iloc[0] == 2000 - 400       # over-spend
+    assert r["regret_search_dc"].iloc[0] == 2000 - 400
     assert r["regret_total_dc"].iloc[0] == 2050 - 400
     assert r["regret_search_dc"].iloc[1] == 200 - 100
-    assert np.isnan(r["regret_total_dc"].iloc[2])             # censored
+    assert np.isnan(r["regret_total_dc"].iloc[2])
 
 
 def test_tier_error_direction():
     e = rl.tier_error(["high", "low", "med", "low"], ["low", "high", "med", "med"])
-    assert e.tolist() == [2, -2, 0, -1]   # >0 conservative, <0 aggressive
+    assert e.tolist() == [2, -2, 0, -1]
 
 
 def test_select_candidate_constraint_score_and_tie_break():
     s = pd.DataFrame({"name": ["DT2", "DT3", "LR", "DT4"],
                       "score": [1.50, 1.51, 1.70, 1.71],
                       "feasible": [True, True, True, True]})
-    assert rl.select_candidate(s, 0.02) == "LR"      # LR simpler than DT4
+    assert rl.select_candidate(s, 0.02) == "LR"
     s.loc[s["name"] == "LR", "feasible"] = False
-    assert rl.select_candidate(s, 0.02) == "DT4"     # infeasible LR dropped
+    assert rl.select_candidate(s, 0.02) == "DT4"
     assert rl.select_candidate(s.assign(score=1.0), 0.02) == "DT2"
     with pytest.raises(RuntimeError):
         rl.select_candidate(s.assign(feasible=False), 0.02)
@@ -138,10 +128,10 @@ def test_tree_rules_render():
 
 def test_wilcoxon_rank_biserial_known_cases():
     a = np.arange(1, 21, dtype=float)
-    r = rl.wilcoxon_paired(a + 1, a)          # all differences +1
+    r = rl.wilcoxon_paired(a + 1, a)
     assert r["rank_biserial"] == pytest.approx(1.0)
     assert r["p_value"] < 1e-4
-    r = rl.wilcoxon_paired(a, a)              # no differences
+    r = rl.wilcoxon_paired(a, a)
     assert r["n_nonzero"] == 0 and r["p_value"] == 1.0
 
 

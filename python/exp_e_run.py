@@ -1,17 +1,6 @@
-"""Experiment E orchestration (docs/exp_e_design_freeze_v2.md §18).
-
-  prepare   write one frozen-DARTH eval config per (seed, state incl. S0); reads only
-            the A1 manifest and run metadata (no outcomes)
-  precheck  §18 step 4, S0 only:
-              - REF(σ, S0) ≡ frozen B1(σ) (mix and per-query ef);
-              - frozen-B1 test costs/recalls from the S0 oracle curves equal the
-                Phase-4b per-query rows;
-              - DARTH via the E pipeline at S0 reproduces the Stage-1/C1 S0 rows
-                (non-timing columns).
-  run       §18 steps 5–7: DARTH on every (seed, state) incl. S0 (33 cells); B1 and
-            REF per-query rows from the oracle curves; §16 completeness checks.
-            Writes results/exp_e_rows_<ts>/. No analysis happens here: the analysis
-            is python/exp_e_analysis.py, run separately on that directory.
+"""Runs Experiment E in three steps: prepare the per-cell configs, precheck that S0
+reproduces the earlier frozen results, then run every cell. Analysis is done
+separately by exp_e_analysis.py.
 
 Usage: python python/exp_e_run.py {prepare|precheck|run} configs/exp_e/experiment_e.yaml
 """
@@ -51,7 +40,6 @@ def cells(P):
 
 
 def cell_info(P, M, seed, state):
-    """Index path, ground-truth prefix, oracle run and deletion list of one (seed, state)."""
     if state == "S0":
         c = P["s0"][seed]
         return {"index": c["index"], "gt_prefix": P["s0_gt_prefix"], "oracle_run": c["oracle_run"],
@@ -105,7 +93,6 @@ def b1_mix(P, seed):
 
 
 def policy_rows(P, M, seed, state, qids):
-    """Frozen B1 and REF per-query rows for one cell, from its oracle curves (§3/§5)."""
     c = cell_info(P, M, seed, state)
     curves = Path(c["oracle_run"]) / "oracle_curves.csv"
     train = rl.load_curves(curves, "train")
@@ -140,12 +127,10 @@ def run_darth(P, seed, state):
 
 def darth_rows(run_dir, seed, state):
     d = pd.read_csv(Path(run_dir) / "darth_eval_rows.csv").sort_values("query_id")
-    # Same cost accounting as B1/REF: total distance computations per query (§3).
     return d.assign(policy="DARTH", seed=seed, state=state, cost=d.distance_computations.astype(float))
 
 
 def verify_frozen(P):
-    """Frozen DARTH policy files and the models they reference must be byte-unchanged."""
     for seed, c in P["s0"].items():
         if sha(c["darth_policy"]) != c["darth_policy_sha256"]:
             stop(f"frozen DARTH policy hash mismatch for seed {seed}")
@@ -191,7 +176,7 @@ def precheck(P, M):
 
 def run(P, M):
     verify_frozen(P)
-    for seed, state in cells(P):  # prepare must have produced every cell config
+    for seed, state in cells(P):
         if not darth_cfg_path(P, seed, state).exists():
             stop(f"missing cell config for seed {seed} {state}; run prepare first")
     qids = test_ids(P)
@@ -202,7 +187,6 @@ def run(P, M):
         run_dir = run_darth(P, seed, state)
         runs[f"{seed}|{state}"] = run_dir
         d = darth_rows(run_dir, seed, state)
-        # §16 completeness checks for the DARTH cell.
         c = cell_info(P, M, seed, state)
         labels = d["labels"].astype(str).str.split(" ").apply(lambda v: [int(x) for x in v])
         n_max = P["n0"] + c["inserted"]

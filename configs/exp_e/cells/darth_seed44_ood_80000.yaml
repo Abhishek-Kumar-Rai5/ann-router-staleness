@@ -1,4 +1,3 @@
-# Experiment E cell: frozen DARTH seed 44 on state ood_80000 (design freeze v2 §3).
 experiment_name: exp_e_darth_seed44_ood_80000
 index_path: data/phase5/sift/states/seed44/ood/ood_80000.bin
 queries: data/sift/sift_query.fvecs
@@ -6,8 +5,8 @@ split_path: splits/sift1m_query_split_seed20261001.csv
 gt_prefix: data/cache/gt_state_ood_80000_seed44_ac857e9b9ccd38b8
 k: 10
 ef_cap: 135
-verify_efs: [135]   # unused in eval mode
-trace_dir: data/exp_e/unused     # unused in eval mode
+verify_efs: [135]
+trace_dir: data/exp_e/unused
 policy_path: derived/exp_e/darth_policy_s0_seed44.json
 output_dir: results
 threads: 1

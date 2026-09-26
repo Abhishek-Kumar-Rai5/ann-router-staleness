@@ -1,13 +1,7 @@
-"""Experiment E analysis (docs/exp_e_design_freeze_v2.md §6–§16).
+"""Experiment E analysis. It refuses to run on missing or incomplete inputs, and it
+never tunes, selects or drops anything.
 
-`validate()` hard-fails on any missing or incomplete cell (§16). `analyze()` is a pure
-function of the per-query rows and the H-E3 predictors, so synthetic tests drive it
-directly. The CLI loads the real artifacts:
-
-  python python/exp_e_analysis.py configs/exp_e/experiment_e.yaml <results/exp_e_rows_dir>
-
-Nothing here tunes, selects or drops anything. Thresholds and terminology are the
-frozen ones.
+Usage: python python/exp_e_analysis.py configs/exp_e/experiment_e.yaml <results/exp_e_rows_dir>
 """
 
 from __future__ import annotations
@@ -32,7 +26,7 @@ PRED_NAMES = ["update_fraction", "overlap_decay", "density_drift", "distribution
 
 
 class AnalysisInputError(RuntimeError):
-    """§16: incomplete or inconsistent inputs. Analysis must not proceed."""
+    pass
 
 
 def state_magnitude(state, n0):
@@ -43,9 +37,7 @@ def state_trajectory(state):
     return state.split("_")[0]
 
 
-# ---------------------------------------------------------------------------- §16 ---
 def validate(rows, preds_q, preds_state, cfg):
-    """Hard failure on anything missing, duplicated or inconsistent."""
     def fail(msg):
         raise AnalysisInputError(msg)
 
@@ -82,14 +74,12 @@ def validate(rows, preds_q, preds_state, cfg):
                                                             for s in seeds for st in states}
     if extra:
         fail(f"unexpected cells present: {sorted(extra)[:5]}")
-    # §5/§7.1: REF at S0 must be frozen B1 exactly (K_REF = K_B1).
     for s in seeds:
         b = rows[(rows.policy == "B1") & (rows.seed == s) & (rows.state == "S0")].sort_values("query_id")
         r = rows[(rows.policy == "REF") & (rows.seed == s) & (rows.state == "S0")].sort_values("query_id")
         if not (np.array_equal(b.cost.to_numpy(), r.cost.to_numpy())
                 and np.array_equal(b.recall_tie_aware.to_numpy(), r.recall_tie_aware.to_numpy())):
             fail(f"seed {s}: REF(S0) differs from frozen B1(S0)")
-    # H-E3 predictors present for every evolved (seed, state) and query.
     for s in seeds:
         for st in states[1:]:
             g = preds_q[(preds_q.seed == s) & (preds_q.state == st)]
@@ -101,7 +91,6 @@ def validate(rows, preds_q, preds_state, cfg):
     return qids
 
 
-# ------------------------------------------------------------------------ helpers ---
 def _vec(rows, pol, seed, state, col, qids):
     g = rows[(rows.policy == pol) & (rows.seed == seed) & (rows.state == state)].set_index("query_id")
     return g.loc[qids, col].to_numpy(dtype=float)
@@ -115,7 +104,6 @@ def _ci(a):
 
 
 def _ci_desc(a):
-    """Descriptive-only CI (H-E4): non-finite replicates are counted, not hidden."""
     a = np.asarray(a, float)
     f = a[np.isfinite(a)]
     return {"ci95": E.ci95(f) if len(f) else [float("nan"), float("nan")],
@@ -126,7 +114,6 @@ def _spearman_point(x, y):
     return float(E.spearman_rows(np.asarray(x)[None, :], np.asarray(y)[None, :])[0])
 
 
-# ------------------------------------------------------------------------- analyze ---
 def analyze(rows, preds_q, preds_state, cfg):
     qids = validate(rows, preds_q, preds_state, cfg)
     seeds = list(cfg["seeds"])
@@ -139,7 +126,6 @@ def analyze(rows, preds_q, preds_state, cfg):
            "bootstrap": {"B": E.B, "seed": E.BOOT_SEED, "unit": "query id (shared matrix)", "interval": "95% percentile"},
            "margins": {"H-E1": E.M1, "H-E2": E.M2}}
 
-    # ---- mean costs and recalls: point + replicates -----------------------------------
     mean_c, rep_c = {}, {}
     for pol in ("B1", "REF", "DARTH"):
         for s in seeds:
@@ -157,7 +143,6 @@ def analyze(rows, preds_q, preds_state, cfg):
                 "seed_mean_ci95": E.ci95(np.mean([E.rep_mean(per[s], idx) for s in seeds], axis=0))}
     out["mean_recall_tie_aware"] = recall
 
-    # ---- H-E1 (§6) ------------------------------------------------------------------
     he1, d_point, d_rep = {}, {}, {}
     for pol in POLICIES:
         cells = {}
@@ -194,7 +179,6 @@ def analyze(rows, preds_q, preds_state, cfg):
                                        "deletion": E.family_verdict([cells[st]["class"] for st in dels])}}
     out["H-E1"] = he1
 
-    # ---- H-E2 (§7) ------------------------------------------------------------------
     he2, e_point, e_rep = {}, {}, {}
     passv = {(pol, s, st): E.is_pass(V(pol, s, st, "recall_tie_aware"))
              for pol in ("B1", "REF", "DARTH") for s in seeds for st in ["S0", *evolved]}
@@ -203,7 +187,7 @@ def analyze(rows, preds_q, preds_state, cfg):
         for st in evolved:
             per_seed, reps = {}, []
             for s in seeds:
-                k_p, k_ref = passv[(pol, s, "S0")], passv[("B1", s, "S0")]   # §7.1: K_REF = K_B1
+                k_p, k_ref = passv[(pol, s, "S0")], passv[("B1", s, "S0")]
                 fail_p, fail_ref = ~passv[(pol, s, st)], ~passv[("REF", s, st)]
                 nfp, nfr = E.nf_rate(k_p, fail_p), E.nf_rate(k_ref, fail_ref)
                 rep = E.nf_rate(k_p, fail_p, idx) - E.nf_rate(k_ref, fail_ref, idx)
@@ -231,7 +215,6 @@ def analyze(rows, preds_q, preds_state, cfg):
                      "E(DARTH) includes a cohort-mix component (reported, not corrected).")
     out["H-E2"] = he2
 
-    # ---- H-E3 (§8) ------------------------------------------------------------------
     def predictor_cells(states_):
         point, rep = {}, {}
         for name in PRED_NAMES:
@@ -313,7 +296,6 @@ def analyze(rows, preds_q, preds_state, cfg):
                    "secondary_abs_rho_vs_update_fraction": sec, "deletion_descriptive": deletion,
                    "secondary_per_query_insertion": perq}
 
-    # ---- H-E4 (§9) ------------------------------------------------------------------
     he4 = {}
     for real_col, label in (("recall_id", "primary_id"), ("recall_tie_aware", "secondary_tie_aware")):
         cells = {}
@@ -356,7 +338,6 @@ def analyze(rows, preds_q, preds_state, cfg):
         for s in seeds for st in ["S0", *evolved]}
     out["H-E4"] = he4
 
-    # ---- §11 trends (secondary) -------------------------------------------------------
     trends = {}
     for pol in POLICIES:
         for which, P_, R_ in (("D", d_point, d_rep), ("E", e_point, e_rep)):
@@ -385,7 +366,6 @@ def analyze(rows, preds_q, preds_state, cfg):
     return out
 
 
-# -------------------------------------------------------------------------------- CLI ---
 def _sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 

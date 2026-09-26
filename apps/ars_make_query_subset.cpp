@@ -1,15 +1,5 @@
-// Phase 4b: draw the fixed confirmation query set from a vector file.
-//
-// Selection = the same algorithm as the router train/test split
-// (ars::MakeQuerySplit: Fisher-Yates over source rows 0..n-1 with
-// std::mt19937_64(seed) and rejection-sampled bounded integers; the first
-// n_select permutation positions are selected). Selected rows are written in
-// ascending source-row order. Depends only on (source row count, n_select,
-// seed) — never on any search result or label.
-//
-// Writes: the subset .fvecs, an id map (row,source_row), an all-"test" tagging
-// file for evaluation-only runs, and metadata.json.
-//
+// Draws a fixed query subset using the same seeded shuffle as the train/test
+// split, so the choice never depends on any search result.
 // Usage: ars_make_query_subset <config.yaml>
 
 #include <exception>
@@ -51,9 +41,6 @@ int main(int argc, char** argv) {
       return std::string(reinterpret_cast<const char*>(m.Row(r)),
                          m.dim * sizeof(float));
     };
-    // 1. Eligible population (ascending source row): exclude byte-exact copies
-    //    of any vector in the exclusion files; optionally keep each distinct
-    //    vector once (lowest source row).
     std::unordered_set<std::string> excluded;
     for (const std::string& p : cfg.exclude_exact_duplicates_of) {
       const ars::FloatMatrix ex = ars::ReadFvecs(p);
@@ -80,7 +67,6 @@ int main(int argc, char** argv) {
     if (population.size() < cfg.n_select) {
       throw std::runtime_error("eligible population smaller than n_select");
     }
-    // 2. Seeded Fisher-Yates over population POSITIONS 0..N-1.
     const std::vector<ars::Split> pick =
         ars::MakeQuerySplit(population.size(), cfg.n_select, cfg.seed);
 

@@ -1,7 +1,3 @@
-// Phase 3: live routing features — definitions on hand-computed inputs, LID
-// against a known-dimension analytic case, edge-case conventions, and
-// extraction on a real index (determinism, consistency with exact search).
-
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -20,7 +16,6 @@
 
 namespace {
 
-// Squared distances from Euclidean ones (search returns squared L2).
 std::vector<float> Sq(const std::vector<double>& d) {
   std::vector<float> out;
   for (const double x : d) {
@@ -35,22 +30,17 @@ TEST(Features, KnnDistanceAndConcentrationOnHandValues) {
   EXPECT_DOUBLE_EQ(ars::KnnDistance(sq, 4), 8.0);
   EXPECT_DOUBLE_EQ(ars::ScoreConcentration(sq, 4), 1.0 / 8.0);
   EXPECT_DOUBLE_EQ(ars::ScoreConcentration(Sq({3, 3, 3}), 3), 1.0);
-  // All candidates coincide with the query: defined as 1 (fully flat).
   EXPECT_DOUBLE_EQ(ars::ScoreConcentration(Sq({0, 0}), 2), 1.0);
   EXPECT_THROW(ars::KnnDistance(sq, 5), std::invalid_argument);
   EXPECT_THROW(ars::ScoreConcentration(sq, 0), std::invalid_argument);
 }
 
 TEST(Features, LidMleOnHandValues) {
-  // d = 1, 2, 4 (k = 3): -2 / (ln(1/4) + ln(2/4)) = 2 / ln 8.
   EXPECT_NEAR(ars::LidMle(Sq({1, 2, 4}), 3), 2.0 / std::log(8.0), 1e-6);
-  // Only the first k distances are used.
   EXPECT_NEAR(ars::LidMle(Sq({1, 2, 4, 100}), 3), 2.0 / std::log(8.0), 1e-6);
 }
 
 TEST(Features, LidMleRecoversKnownIntrinsicDimension) {
-  // Distances of the i-th nearest of uniformly spread points in a
-  // D-dimensional ball scale as (i/k)^(1/D); the MLE should recover ~D.
   for (const int dim : {2, 5, 12}) {
     std::vector<double> d;
     const int k = 2000;
@@ -62,17 +52,16 @@ TEST(Features, LidMleRecoversKnownIntrinsicDimension) {
 }
 
 TEST(Features, LidMleEdgeConventions) {
-  EXPECT_DOUBLE_EQ(ars::LidMle(Sq({0, 0, 0}), 3), 0.0);  // d_k == 0
-  EXPECT_DOUBLE_EQ(ars::LidMle(Sq({0, 1, 2}), 3), 0.0);  // some d_i == 0
+  EXPECT_DOUBLE_EQ(ars::LidMle(Sq({0, 0, 0}), 3), 0.0);
+  EXPECT_DOUBLE_EQ(ars::LidMle(Sq({0, 1, 2}), 3), 0.0);
   EXPECT_EQ(ars::LidMle(Sq({2, 2, 2}), 3),
-            std::numeric_limits<double>::infinity());  // all equal
+            std::numeric_limits<double>::infinity());
   EXPECT_THROW(ars::LidMle(Sq({1}), 1), std::invalid_argument);
   EXPECT_THROW(ars::LidMle(Sq({1, 2}), 3), std::invalid_argument);
 }
 
 TEST(Features, CentroidAndCentroidDistance) {
-  const ars::FloatMatrix base{
-      {0, 0, 2, 4, 4, 8}, 3, 2};  // rows (0,0)(2,4)(4,8)
+  const ars::FloatMatrix base{{0, 0, 2, 4, 4, 8}, 3, 2};
   const auto c = ars::ComputeCentroid(base);
   ASSERT_EQ(c.size(), 2U);
   EXPECT_DOUBLE_EQ(c[0], 2.0);
@@ -112,22 +101,18 @@ TEST(Features, ExtractionIsDeterministicAndConsistentWithExactSearch) {
     EXPECT_EQ(f1[q].lid, f8[q].lid);
     EXPECT_EQ(f1[q].probe_distance_computations,
               f8[q].probe_distance_computations);
-    // An approximate probe can only overestimate the true k-th distance.
     EXPECT_GE(f1[q].knn_dist + 1e-5, std::sqrt(gt.dists.Row(q)[9]));
     EXPECT_GT(f1[q].score_concentration, 0.0);
     EXPECT_LE(f1[q].score_concentration, 1.0);
     EXPECT_TRUE(std::isfinite(f1[q].lid));
     EXPECT_GT(f1[q].lid, 0.0);
     EXPECT_GT(f1[q].probe_distance_computations, 0U);
-    // The deeper LID probe costs at least as much as the core probe.
     EXPECT_GE(f1[q].lid_probe_distance_computations,
               f1[q].probe_distance_computations);
-    // LID-ablation core features come from the first 10 of the k=20 probe.
     const auto lp = index.Search(queries.Row(q), 20, 20);
     EXPECT_EQ(f1[q].knn_dist_lid_probe, ars::KnnDistance(lp.dists, 10));
     EXPECT_EQ(f1[q].score_concentration_lid_probe,
               ars::ScoreConcentration(lp.dists, 10));
-    // ...and equal a k=10, ef=20 search (hnswlib uses max(ef, k)).
     const auto s10 = index.Search(queries.Row(q), 10, 20);
     EXPECT_EQ(f1[q].knn_dist_lid_probe, ars::KnnDistance(s10.dists, 10));
     EXPECT_EQ(f1[q].lid_probe_distance_computations, s10.distance_computations);

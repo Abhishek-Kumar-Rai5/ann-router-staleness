@@ -1,11 +1,5 @@
-"""Phase 4b confirmation set: label-free integrity checks and distribution-shift
-report. Reads only raw vectors and (stage "features") label-free router
-features. Never reads ground truth, oracle curves or labels.
-
-Integrity policy (frozen, bias audit §9): any exact duplicate of a selected
-vector in the base set, in the original 10,000 SIFT queries, or within the set
-itself -> FAIL (stop before evaluation). Selection must be exactly reproducible
-by an independent re-implementation of the selection algorithm.
+"""Integrity and distribution-shift checks for the Phase 4b confirmation set.
+Never reads ground truth, oracle curves or labels.
 
 Usage:
   python python/phase4b_confirmation_checks.py integrity configs/phase4b/confirmation_set.yaml
@@ -31,7 +25,7 @@ def read_fvecs(path):
     return rows[:, 1:].copy().view(np.float32)
 
 
-class MT64:  # reference MT19937-64 (independent of the C++ standard library)
+class MT64:
     def __init__(self, seed):
         self.mt = [0] * 312
         self.mt[0] = seed & 0xFFFFFFFFFFFFFFFF
@@ -83,8 +77,6 @@ def integrity(cfg):
     tags = pd.read_csv(cfg["output_tagging"])
     base = read_fvecs("data/sift/sift_base.fvecs")
     query = read_fvecs("data/sift/sift_query.fvecs")
-    # Independent re-implementation of the population definition (v2) and of
-    # the seeded Fisher-Yates over population positions.
     excl = set()
     for path in cfg.get("exclude_exact_duplicates_of", []):
         excl |= row_keys(read_fvecs(path))
@@ -120,7 +112,6 @@ def integrity(cfg):
                    and rep["tagging_all_test"] and rep["exact_duplicates_vs_base"] == 0
                    and rep["exact_duplicates_vs_original_queries"] == 0
                    and rep["exact_duplicates_within_set"] == 0)
-    # Label-free raw-vector shift summaries (original 10,000 queries vs set).
     def summ(m):
         nrm = np.linalg.norm(m.astype(np.float64), axis=1)
         return {"norm_quantiles": np.percentile(nrm, [5, 25, 50, 75, 95]).round(2).tolist(),
@@ -138,7 +129,6 @@ def integrity(cfg):
 
 
 def ref_dim_diff(query):
-    """Scale reference: same statistic between the original train and test splits."""
     sp = pd.read_csv("splits/sift1m_query_split_seed20261001.csv")
     tr = query[(sp["split"] == "train").to_numpy()]
     te = query[(sp["split"] == "test").to_numpy()]
@@ -159,8 +149,6 @@ def nn_sq(a, b, exclude_self=False):
 
 
 def nn_report(sub, query):
-    """Euclidean distance to the nearest ORIGINAL query (no threshold, nothing
-    removed), with same-population reference distributions for scale."""
     sp = pd.read_csv("splits/sift1m_query_split_seed20261001.csv")
     tr = query[(sp["split"] == "train").to_numpy()]
     te = query[(sp["split"] == "test").to_numpy()]

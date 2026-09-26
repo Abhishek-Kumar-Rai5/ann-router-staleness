@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
-# Download and verify SIFT1M (TEXMEX corpus) into data/sift/.
-#
+# Downloads SIFT1M into data/sift/ and checks file sizes and dimensions.
+# SHA-256 sums are saved on the first download and checked on every later run.
 # Usage: scripts/download_sift1m.sh [DATA_DIR]   (default: data)
-#
-# Verification: exact expected file sizes (derived from the .fvecs/.ivecs
-# layout: 4-byte dim header + dim * 4-byte values per vector) and the dim
-# header of the first vector. SHA-256 sums are recorded on first download to
-# data/sift/SHA256SUMS and checked on every later run.
+
 set -euo pipefail
 
 DATA_DIR="${1:-data}"
 DEST="${DATA_DIR}/sift"
 URL="ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz"
 
-# name expected_bytes expected_dim
 FILES=(
   "sift_base.fvecs 516000000 128"
   "sift_query.fvecs 5160000 128"

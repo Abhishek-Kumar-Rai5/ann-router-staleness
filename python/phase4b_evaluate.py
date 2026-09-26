@@ -1,16 +1,5 @@
-"""Phase 4b FINAL EVALUATION of the frozen routers (no fitting, no selection).
-
-Modes (configs/phase4b/evaluate.yaml):
-  dry_run_train          code check on TRAINING rows (in-sample; never a result)
-  confirmation           PRIMARY: the sift_learn confirmation set (used once)
-  old_test_second_look   SECONDARY / DISCLOSED SECOND LOOK: the old test split
-
-Everything frozen comes from the training run (router specs, models, tau, B1)
-and is hash-verified against its manifest before use. Statistical plan
-(docs/phase4_bias_audit.md §10): query-clustered bootstrap (resample query
-ids, all seeds of a query together), Wilcoxon on per-query seed-averaged
-paired cost differences, exact McNemar per seed, one gate per S*, Phase 4 PASS
-iff all three S* pass.
+"""Final evaluation of the frozen Phase 4b routers. Everything frozen is
+hash-checked against the training run before use; nothing is fitted or selected.
 
 Usage: python python/phase4b_evaluate.py configs/phase4b/evaluate.yaml <mode>
 """
@@ -48,7 +37,6 @@ def verify_manifest(run: Path):
 
 
 def descent_dc(index_path, qvecs):
-    """Upper-layer descent distance count per query (independent replica)."""
     idx = V.HnswFile(index_path)
     vec = idx.vec.astype(np.float64)
     out = np.empty(len(qvecs))
@@ -72,8 +60,6 @@ def descent_dc(index_path, qvecs):
 
 
 def b2_expected_cost(level_by_ef, dc_by_ef, grid, target):
-    """Hindsight fixed policy: cheapest two-ef mix on THIS query set reaching
-    `target` (linear in the quality measure); inf if unreachable."""
     mix = rb.two_ef_mix(level_by_ef, grid, target)
     if mix is None:
         return float("inf"), None
@@ -127,21 +113,18 @@ def main() -> int:
              "lid": T.candidate_matrices(cands, 20, feats["lid_probe_distance_computations"].to_numpy(float),
                                          curves, q, target)}
         y = rb.candidate_oracle_index(M["primary"]["success"])
-        # Grid (per-query minimum-ef) oracle and difficulty groups (frozen 18/48).
         reached = labels["reached"].to_numpy() == 1
         oef = labels["oracle_ef"].to_numpy()
         grid_or_dc = np.full(len(q), np.nan)
         grid_or_dc[reached] = Dg[np.where(reached)[0], [grid.index(int(e)) for e in oef[reached]]]
         diff = np.where(~reached | (np.nan_to_num(oef, nan=1e9) > cfg["difficulty"]["medium_max"]), "hard",
                         np.where(oef <= cfg["difficulty"]["easy_max"], "easy", "medium"))
-        # Shared-descent sensitivity input (independent replica, label-free).
         qcfg = yaml.safe_load((Path(sc["oracle_run"]) / "config.yaml").read_text())
         qv = np.fromfile(qcfg["dataset"]["queries"], dtype=np.float32).reshape(-1, 129)[:, 1:][q]
         desc = descent_dc(ometa["index"]["cache_path"], qv)
         ps = {"q": q, "grid": grid, "Rg": Rg, "Dg": Dg, "Sg": Sg, "M": M, "y": y,
               "grid_or_dc": grid_or_dc, "reached": reached, "diff": diff, "descent": desc,
               "policies": {}}
-        # Frozen routers.
         for spec_path in sorted((train_run / "routers" / str(seed)).glob("*/*.json")):
             spec = json.loads(spec_path.read_text())
             mdir = train_run / spec["model_dir"]
@@ -162,12 +145,9 @@ def main() -> int:
                    "ef": np.array([10 if cands[c] == "probe" else cands[c] for c in choice]) if spec["variant"] != "lid_ablation"
                    else np.array([20 if cands[c] == "probe" else cands[c] for c in choice]),
                    "spec": spec}
-            # Sensitivities: shared descent (routed search re-uses the probe's
-            # descent) and probe-free.
             routed = np.array([cands[c] != "probe" for c in choice])
             pol["cost_shared_descent"] = pol["cost"] - np.where(routed, desc, 0.0)
             pol["cost_probe_free"] = pol["search"]
-            # B1 (frozen two-ef mix, deterministic hash) and secondary pure B1.
             b1 = spec["b1"]
             ef_b1 = rb.assign_mix(b1, q, es["query_set_id"], b1["hash_seed"])
             cols = np.array([grid.index(e) for e in ef_b1])
@@ -189,7 +169,6 @@ def main() -> int:
                                 "b1_ef", "b1_cost", "b1_success", "b1_recall", "difficulty",
                                 "descent_dc"]).to_csv(od / "per_query_rows.csv", index=False)
 
-    # ---------------- analysis per (group, contract, level) -----------------
     n = len(per_seed[seeds[0]]["q"])
     assert all(len(per_seed[s]["q"]) == n and (per_seed[s]["q"] == per_seed[seeds[0]]["q"]).all() for s in seeds)
     rng = np.random.default_rng(st["bootstrap_seed"])
@@ -234,7 +213,6 @@ def main() -> int:
              for f in ("cost", "success", "recall")}
         Bp = {f: np.stack([per_seed[s]["policies"][key]["b1_pure"][f] for s in seeds]).astype(float)
               for f in ("cost", "success", "recall")}
-        # Per-seed curves for B2 (quality per grid ef, cost per grid ef).
         Qg = [per_seed[s]["Sg"].astype(float) if contract == "per_query" else per_seed[s]["Rg"] for s in seeds]
         Dgs = [per_seed[s]["Dg"] for s in seeds]
         grid = per_seed[seeds[0]]["grid"]
@@ -265,8 +243,6 @@ def main() -> int:
               "sensitivity_shared_descent_saving_vs_b1": float(1 - A["cost_shared_descent"].mean() / B["cost"].mean()),
               "sensitivity_probe_free_saving_vs_b1": float(1 - A["cost_probe_free"].mean() / B["cost"].mean()),
               "router_fallback_rate": float(np.mean([per_seed[s]["policies"][key]["fallback"].mean() for s in seeds]))}
-        # Query-clustered bootstrap (resample query ids; every seed of a query
-        # moves together). W[b, i] = multiplicity of query i in resample b.
         W = W_boot
         S_ = len(seeds)
         rc = (W @ A["cost"].T).sum(1) / (S_ * n)
@@ -274,7 +250,7 @@ def main() -> int:
         bs = {"saving_vs_b1": 1 - rc / bc, "abs_saving_vs_b1": bc - rc,
               "success_diff": (W @ (A["success"] - B["success"]).T).sum(1) / (S_ * n),
               "mean_recall_diff": (W @ (A["recall"] - B["recall"]).T).sum(1) / (S_ * n)}
-        rq = (W @ A[qkey].T) / n                     # (B, seeds) router quality
+        rq = (W @ A[qkey].T) / n
         b2c = np.zeros(len(W))
         for k_, s in enumerate(seeds):
             QW, DW = boot_curves[(s, contract)]
@@ -282,9 +258,7 @@ def main() -> int:
                              for b in range(len(W))])
         bs["saving_vs_b2"] = 1 - rc / (b2c / S_)
         ci = {k: [float(x) for x in np.percentile(v, [2.5, 97.5])] for k, v in bs.items()}
-        # Wilcoxon on per-query seed-averaged paired differences.
         wil = rl.wilcoxon_paired(A["cost"].mean(0), B["cost"].mean(0))
-        # Per seed + exact McNemar.
         per = {}
         for k_, s in enumerate(seeds):
             b_ = int(((A["success"][k_] == 1) & (B["success"][k_] == 0)).sum())
@@ -303,7 +277,6 @@ def main() -> int:
                            "tau": per_seed[s]["policies"][key]["spec"]["tau"],
                            "family": per_seed[s]["policies"][key]["spec"]["family"],
                            "variant": per_seed[s]["policies"][key]["spec"]["variant"]}
-        # Regret decomposition (per seed, then pooled mean).
         reg = []
         for s in seeds:
             ps = per_seed[s]
@@ -324,7 +297,6 @@ def main() -> int:
                   ("avoidable_failure_rate", "unavoidable_failure_rate", "overspend_on_successes_mean",
                    "underspend_on_avoidable_failures_mean", "mean_probe_cost", "contract_regret",
                    "contract_oracle_cost_at_realised_quality", "legacy_regret_total_minus_grid_oracle_dc")}
-        # Difficulty groups (descriptive).
         dg = {}
         for g in ("easy", "medium", "hard"):
             msk = np.stack([per_seed[s]["diff"] == g for s in seeds])
@@ -333,7 +305,6 @@ def main() -> int:
                      "b1_success": float(B["success"][msk].mean())}
         res = {"point": pt, "ci95": ci, "wilcoxon_seed_averaged": wil, "per_seed": per,
                "regret": regret, "difficulty": dg}
-        # Frozen gate (per-query family gates; mean family reported identically).
         qdiff_ci = ci["success_diff"] if contract == "per_query" else ci["mean_recall_diff"]
         qdiff_seed = [per[str(s)]["success_diff" if contract == "per_query" else "router_mean_recall"]
                       - (0 if contract == "per_query" else per[str(s)]["b1_mean_recall"]) for s in seeds]

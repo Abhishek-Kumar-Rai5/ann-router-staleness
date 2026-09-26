@@ -1,7 +1,5 @@
-"""Experiment C (design_doc.md Addendum C1): analysis of the single frozen DARTH
-evaluation on the 2,000 Phase-2 test queries (S0 seed 42) against the frozen
-Phase-4b mean-recall B1 at R = 0.95. Gate criteria exactly as in C1.5; nothing
-here is tuned.
+"""Analyses the single frozen DARTH evaluation (Experiment C) against the frozen
+B1 baseline. The gate criteria are the pre-registered ones; nothing is tuned here.
 
 Usage: python python/exp_c_eval.py configs/exp_c/darth_s0.yaml <eval_run> <repeat_eval_run>
 """
@@ -17,10 +15,10 @@ import pandas as pd
 import yaml
 from scipy import stats
 
-POLICY_SHA256 = "bcbe2720044b51edff1b493b956e413958f8503a6a76bfe86f52317cec8ac75d"  # notes, frozen
+POLICY_SHA256 = "bcbe2720044b51edff1b493b956e413958f8503a6a76bfe86f52317cec8ac75d"
 MODEL_SHA256 = "d291a2f1f8cbd64f9fa2e744dd0cfc8bcc1b4261aba13915c88d1b94430eb041"
 B1_ROWS = "results/phase4b_eval_old_test_second_look_20261002T175740Z/per_query_rows.csv"
-ORACLE_RUN = "results/8e605bfc5769_20261001T201040Z"  # Phase 2, S0 seed 42 (read-only)
+ORACLE_RUN = "results/8e605bfc5769_20261001T201040Z"
 B, BOOT_SEED = 2000, 20261002
 TIMING = ["predictor_seconds", "wall_seconds", "plain_ef50_seconds", "plain_ef53_seconds"]
 
@@ -39,9 +37,7 @@ def main() -> int:
     run, rerun = Path(sys.argv[2]), Path(sys.argv[3])
     checks = {}
 
-    # ---- provenance -------------------------------------------------------------
     pol = json.loads(Path(C["policy_path"]).read_text())
-    # Optional per-seed keys (Experiment E replication); defaults = seed-42 C1.
     seed = int(C.get("index_seed", 42))
     oracle_run = C.get("s0_oracle_run", ORACLE_RUN)
     checks["policy_hash_unchanged"] = sha(C["policy_path"]) == C.get("expected_policy_sha256", POLICY_SHA256)
@@ -58,14 +54,12 @@ def main() -> int:
     keep = [c for c in D.columns if c not in TIMING]
     checks["deterministic_repeat_non_timing_identical"] = D[keep].equals(D2[keep])
 
-    # ---- leakage / query identity --------------------------------------------------
     split = pd.read_csv(C["split_path"])
     test_ids = split.loc[split.split == "test", "query_id"].to_numpy()
     train_ids = set(split.loc[split.split == "train", "query_id"])
     checks["eval_queries_are_exactly_test_split"] = np.array_equal(np.sort(D.query_id), np.sort(test_ids))
     checks["no_train_test_overlap"] = not (set(D.query_id) & train_ids)
 
-    # ---- B1 (frozen Phase 4b, read-only) + accounting consistency ------------------
     b = pd.read_csv(B1_ROWS)
     b = b[(b.seed == seed) & (b.contract == "mean_recall") & (b.level == 0.95) & (b.variant == "primary")]
     b = b[["query_id", "b1_ef", "b1_cost", "b1_recall"]].set_index("query_id").loc[D.query_id].reset_index()
@@ -79,7 +73,6 @@ def main() -> int:
     checks["live_plain_search_cost_equals_b1_cost"] = np.array_equal(plain_dc, b.b1_cost.to_numpy())
     cap = cur.xs(int(pol["ef_cap"]), level="ef").loc[D.query_id]
 
-    # ---- plausibility -------------------------------------------------------------
     dc = D.distance_computations.to_numpy().astype(float)
     checks["recall_in_0_1"] = bool(D.recall_tie_aware.between(0, 1).all() and D.recall_id.between(0, 1).all())
     checks["dc_positive_and_le_plain_cap_plus_one_node"] = bool((dc >= 1).all() and
@@ -88,7 +81,6 @@ def main() -> int:
     stopped = float(D.stopped_early.mean())
     checks["most_queries_terminate_early"] = stopped > 0.5
 
-    # ---- gate (C1.5) -------------------------------------------------------------
     bc = b.b1_cost.to_numpy().astype(float)
     rd = D.recall_tie_aware.to_numpy()
     rb = b.b1_recall.to_numpy()
@@ -118,7 +110,6 @@ def main() -> int:
     mechanism_ok = all(checks.values())
     c1_pass = mechanism_ok and all(v["pass"] for v in g.values())
 
-    # ---- descriptive / overhead ------------------------------------------------------
     b1_wall = np.where(b.b1_ef == 50, D.plain_ef50_seconds, D.plain_ef53_seconds)
     rep = {
         "checks": checks, "gate": g, "C1_PASS": c1_pass,

@@ -23,7 +23,6 @@ std::size_t RowLimit(std::size_t configured) {
   return configured == 0 ? kAllRows : configured;
 }
 
-// Identity of an input file for cache keys: path, size and rows used.
 std::string FileIdentity(const std::string& path, std::size_t rows) {
   return path + "|" + std::to_string(fs::file_size(path)) + "|" +
          std::to_string(rows);
@@ -83,9 +82,8 @@ static std::string StateIdentity(const S0Config& cfg) {
 
 S0GroundTruth LoadOrComputeS0GroundTruth(const S0Config& cfg,
                                          const S0Data& data) {
-  // Key format is unchanged from Phase 1 so its cached files remain valid.
-  // Key format for S0 is unchanged from Phase 1 so its cached files remain
-  // valid; evolved states get their own key and file prefix (never reused).
+  // The S0 key format hasn't changed since Phase 1, so old cache files are
+  // still valid. Evolved states get their own key.
   const std::string sid = StateIdentity(cfg);
   const std::string key =
       Hex64(Fnv1a64((sid == "S0" ? std::string("gt|S0|") : "gt|" + sid + "|") +
@@ -119,7 +117,6 @@ S0GroundTruth LoadOrComputeS0GroundTruth(const S0Config& cfg,
 
 S0Index LoadOrBuildS0Index(const S0Config& cfg, const S0Data& data) {
   if (cfg.state.present) {
-    // Evolved states are produced by ars_evolve; here they are only loaded.
     const auto t0 = Clock::now();
     S0Index s{HnswIndex::Load(cfg.state.index_path, data.base.dim),
               cfg.state.index_path, true, 0.0};

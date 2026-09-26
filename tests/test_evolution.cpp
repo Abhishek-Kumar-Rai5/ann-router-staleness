@@ -1,6 +1,3 @@
-// Phase 5' (design_doc.md Addendum A1): evolved-state support — masked ground
-// truth, masked centroid, resize / lazy delete, state loading, evolve config.
-
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -58,7 +55,6 @@ TEST(MaskedGroundTruth, ExcludedRowsNeverReturnedAndMatchesNaive) {
     ex[i] = 1;
   }
   const auto r = ars::BruteForceKnnExcluding(base, q, 10, ex);
-  // Naive: brute force on the live rows only, mapped back to labels.
   ars::FloatMatrix live{{}, 0, base.dim};
   std::vector<std::int32_t> label;
   for (std::size_t i = 0; i < base.rows; ++i) {
@@ -159,7 +155,7 @@ TEST(StateLoading, InsertedRowsAppendedAndDeletedMaskBuilt) {
   EXPECT_EQ(d.excluded[104], 1);
   EXPECT_EQ(d.excluded[5], 0);
   std::ofstream(Tmp("st_del.csv")) << "label\n3\n3\n";
-  EXPECT_THROW(ars::LoadS0Data(c), std::runtime_error);  // duplicate label
+  EXPECT_THROW(ars::LoadS0Data(c), std::runtime_error);
 }
 
 TEST(EvolveConfig, ParsesAndValidates) {

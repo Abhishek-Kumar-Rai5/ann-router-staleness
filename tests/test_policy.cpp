@@ -1,5 +1,3 @@
-// Phase 4: policy-file parsing used by the independent re-search validation.
-
 #include <gtest/gtest.h>
 
 #include <fstream>

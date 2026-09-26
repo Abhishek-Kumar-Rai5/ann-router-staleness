@@ -14,8 +14,6 @@ std::uint64_t UniformBelow(std::mt19937_64& rng, std::uint64_t bound) {
   if (bound == 0) {
     throw std::invalid_argument("UniformBelow: bound must be > 0");
   }
-  // Reject the lowest (2^64 mod bound) raw values so that the remaining range
-  // is an exact multiple of bound.
   const std::uint64_t threshold = (0 - bound) % bound;
   while (true) {
     const std::uint64_t r = rng();

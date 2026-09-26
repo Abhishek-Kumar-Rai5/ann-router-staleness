@@ -1,24 +1,22 @@
-# Phase 4b final evaluation of the FROZEN routers (frozen statistical plan:
-# docs/phase4_bias_audit.md §10). No fitting or selection happens here.
 experiment_name: phase4b_final_evaluation
 train_run: results/phase4b_train_311634ee3011_20261002T145649Z
 
 eval_sets:
-  dry_run_train:          # code check only (in-sample); never reported as a result
+  dry_run_train:  # code check only, never reported as a result
     query_set_id: sift_query
     split_value: train
     seeds:
       42: {oracle_run: results/8e605bfc5769_20261001T201040Z, features_run: results/657980fb7c23_20261002T144828Z}
       43: {oracle_run: results/e795d8b6d6df_20261002T133032Z, features_run: results/94945b3661cb_20261002T144831Z}
       44: {oracle_run: results/3e2faa1921f8_20261002T133032Z, features_run: results/1c816578a946_20261002T144834Z}
-  confirmation:           # PRIMARY; runs filled in after the set is created
-    query_set_id: sift_learn_confirm_v2_seed20261007   # frozen v2 set (v1 rejected)
-    split_value: test     # all rows of the confirmation set are tagged "test"
-    seeds:                # confirmation v2 runs (2026-10-02)
+  confirmation:
+    query_set_id: sift_learn_confirm_v2_seed20261007
+    split_value: test
+    seeds:
       42: {oracle_run: results/6cc721cd28dc_20261002T173819Z, features_run: results/152d65619a3d_20261002T174455Z}
       43: {oracle_run: results/c4eb66527ca2_20261002T174027Z, features_run: results/0424aedbaf85_20261002T174457Z}
       44: {oracle_run: results/dc50f5d75ebc_20261002T174241Z, features_run: results/09a4fe4d7f3a_20261002T174459Z}
-  old_test_second_look:   # SECONDARY / DISCLOSED SECOND LOOK (after primary)
+  old_test_second_look:  # secondary, disclosed second look
     query_set_id: sift_query
     split_value: test
     seeds:
@@ -33,12 +31,12 @@ statistics:
   wilcoxon: per-query seed-averaged paired cost differences (router - B1)
   mcnemar: exact, per seed
 
-gate:                     # frozen (bias audit §10)
+gate:
   min_saving: 0.10
   alpha: 0.01
   quality_margin: -0.01
-  calibration_flag_tolerance: 0.02   # symmetric report only (both below S* - 0.02 -> shift flag)
+  calibration_flag_tolerance: 0.02
 
-difficulty: {easy_max: 18, medium_max: 48}   # easy <= 18 < medium <= 48 < hard (frozen Phase 3)
+difficulty: {easy_max: 18, medium_max: 48}
 
 output_dir: results

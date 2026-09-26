@@ -1,9 +1,6 @@
-// Phase 4 validation: re-run the real hnswlib search for every query at the
-// efSearch a policy assigned to it, against the verified S0 ground truth.
-// Used to check independently that curve-lookup based evaluation (Python)
-// matches actual search results. Deterministic; no timing.
-//
-// Usage: ars_eval_policy <config.yaml>   (writes policy_eval.csv)
+// Re-runs the real search at the ef a policy assigned to each query, to check
+// that the Python curve-lookup evaluation matches actual search results.
+// Usage: ars_eval_policy <config.yaml>
 
 #include <exception>
 #include <filesystem>
@@ -41,7 +38,6 @@ int main(int argc, char** argv) {
     const std::vector<ars::PolicyEntry> policy =
         ars::ReadPolicyCsv(cfg.policy_path);
 
-    // Group queries by ef so each group is one race-free SearchBatch.
     std::map<std::size_t, std::vector<std::size_t>> by_ef;
     for (const auto& e : policy) {
       if (e.query_id >= data.queries.rows) {
@@ -52,6 +48,7 @@ int main(int argc, char** argv) {
     std::ofstream csv(out_dir / "policy_eval.csv");
     csv << "query_id,ef,recall,recall_tie_aware,distance_computations\n";
     csv.precision(10);
+    // Queries are grouped by ef because SearchBatch needs a single ef per call.
     for (const auto& [ef, ids] : by_ef) {
       ars::FloatMatrix sub{std::vector<float>(ids.size() * data.queries.dim),
                            ids.size(), data.queries.dim};

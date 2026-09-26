@@ -1,6 +1,3 @@
-// Phase 2: query split, ef grid, oracle-label derivation, and parallel batch
-// search equivalence.
-
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -21,11 +18,7 @@
 
 namespace {
 
-// ---------------------------------------------------------------- split ----
-
 TEST(QuerySplit, Mt19937_64MatchesStandardMandatedValue) {
-  // [rand.predef]: the 10000th output of a default-constructed mt19937_64 is
-  // 9981545732273789042. Pins the engine the split depends on.
   std::mt19937_64 rng;
   rng.discard(9999);
   EXPECT_EQ(rng(), 9981545732273789042ULL);
@@ -40,7 +33,7 @@ TEST(QuerySplit, UniformBelowStaysInRangeAndCoversIt) {
     ++counts[v];
   }
   for (const int c : counts) {
-    EXPECT_NEAR(c, 10000, 500);  // ~5 sigma
+    EXPECT_NEAR(c, 10000, 500);
   }
   EXPECT_EQ(ars::UniformBelow(rng, 1), 0U);
   EXPECT_THROW(ars::UniformBelow(rng, 0), std::invalid_argument);
@@ -61,9 +54,8 @@ TEST(QuerySplit, DeterministicForSeedAndDifferentAcrossSeeds) {
 }
 
 TEST(QuerySplit, GoldenValuesPinTheAlgorithm) {
-  // Regression guard: any change to the shuffle, the bounded-int sampler or
-  // the engine changes these ids, which would silently change the project's
-  // fixed query split. Recorded when the split was first established.
+  // Regression guard: if this changes, the project's fixed query split has
+  // silently changed too.
   const auto split = ars::MakeQuerySplit(20, 5, 1);
   std::vector<std::size_t> test_ids;
   for (std::size_t q = 0; q < split.size(); ++q) {
@@ -75,7 +67,6 @@ TEST(QuerySplit, GoldenValuesPinTheAlgorithm) {
 }
 
 TEST(QuerySplit, TestSetIsNotAContiguousBlock) {
-  // A uniform random split should spread test ids over the whole id range.
   const auto split = ars::MakeQuerySplit(10000, 2000, 20261001);
   int first_half = 0;
   for (std::size_t q = 0; q < 5000; ++q) {
@@ -89,7 +80,7 @@ TEST(QuerySplit, CsvRoundTripAndRejectsBadFiles) {
   const std::string path = ::testing::TempDir() + "/split.csv";
   std::ofstream(path) << ars::SplitToCsv(split);
   EXPECT_EQ(ars::ReadSplitCsv(path), split);
-  std::ofstream(path) << "query_id,split\n0,train\n2,test\n";  // gap in ids
+  std::ofstream(path) << "query_id,split\n0,train\n2,test\n";
   EXPECT_THROW(ars::ReadSplitCsv(path), std::runtime_error);
   std::ofstream(path) << "query_id,split\n0,validation\n";
   EXPECT_THROW(ars::ReadSplitCsv(path), std::runtime_error);
@@ -100,20 +91,15 @@ TEST(QuerySplit, RejectsDegenerateSizes) {
   EXPECT_THROW(ars::MakeQuerySplit(10, 10, 1), std::invalid_argument);
 }
 
-// -------------------------------------------------------------- ef grid ----
-
 TEST(EfGrid, IntegerStepsThenGeometricAndEndsAtMax) {
   const auto g = ars::GeometricEfGrid(10, 4096, 1.05);
   EXPECT_EQ(g.front(), 10U);
   EXPECT_EQ(g.back(), 4096U);
-  // 10..20 inclusive: ratio*ef < ef+1 there, so the step is +1.
   for (std::size_t i = 0; i <= 10; ++i) {
     EXPECT_EQ(g[i], 10 + i);
   }
   for (std::size_t i = 1; i < g.size(); ++i) {
     ASSERT_GT(g[i], g[i - 1]);
-    // Relative step never exceeds the ratio (rounding aside), except the
-    // final clamp to max, which can only shrink a step.
     EXPECT_LE(static_cast<double>(g[i]),
               std::max(g[i - 1] + 1.0, g[i - 1] * 1.05 + 0.5));
   }
@@ -128,8 +114,6 @@ TEST(EfGrid, DegenerateAndInvalid) {
   EXPECT_THROW(ars::GeometricEfGrid(10, 20, 1.0), std::invalid_argument);
 }
 
-// ----------------------------------------------------------- oracle label --
-
 TEST(OracleLabel, MonotoneCurvePicksFirstEfAtTarget) {
   const auto l = ars::DeriveOracleLabel({0.5, 0.8, 0.9, 1.0, 1.0}, 0.9);
   ASSERT_TRUE(l.reached);
@@ -138,22 +122,18 @@ TEST(OracleLabel, MonotoneCurvePicksFirstEfAtTarget) {
 }
 
 TEST(OracleLabel, TargetBetweenRecallStepsNeedsNextStep) {
-  // With k = 10, recall is a multiple of 0.1: a 0.95 target needs 1.0.
   const auto l = ars::DeriveOracleLabel({0.8, 0.9, 0.9, 1.0}, 0.95);
   ASSERT_TRUE(l.reached);
   EXPECT_EQ(l.index, 3U);
 }
 
 TEST(OracleLabel, ExactBoundaryValueCountsAsReached) {
-  // 9/10 computed in floating point must satisfy a 0.9 target.
   const auto l = ars::DeriveOracleLabel({0.0, 9.0 / 10.0}, 0.9);
   ASSERT_TRUE(l.reached);
   EXPECT_EQ(l.index, 1U);
 }
 
 TEST(OracleLabel, NonMonotoneCurveUsesStableReach) {
-  // Reaches target at index 1, dips at 2, reaches again from 3 on: the
-  // oracle is the stable point (3); first_reach records the transient (1).
   const auto l = ars::DeriveOracleLabel({0.8, 1.0, 0.9, 1.0, 1.0}, 1.0);
   ASSERT_TRUE(l.reached);
   EXPECT_EQ(l.index, 3U);
@@ -169,12 +149,9 @@ TEST(OracleLabel, AlreadyAtTargetAtSmallestEf) {
 
 TEST(OracleLabel, NotReachedAtMaxEfIsCensored) {
   EXPECT_FALSE(ars::DeriveOracleLabel({0.5, 0.9, 0.9}, 0.95).reached);
-  // Reaching it transiently but ending below target is also censored.
   EXPECT_FALSE(ars::DeriveOracleLabel({0.5, 1.0, 0.9}, 0.95).reached);
   EXPECT_THROW(ars::DeriveOracleLabel({}, 0.9), std::invalid_argument);
 }
-
-// ------------------------------------------------- search batch / oracle ---
 
 ars::FloatMatrix Gaussian(std::size_t rows, std::size_t dim,
                           std::uint32_t seed) {
@@ -212,9 +189,6 @@ TEST(SearchBatch, IdenticalToSerialSearchForAnyThreadCount) {
 }
 
 TEST(OracleEndToEnd, LabelIsMinimalEfOnRealSearchCurves) {
-  // Small real index: derive labels from search curves over a grid and check
-  // the defining property directly — target met at the label ef and at every
-  // larger grid ef, and not met at the grid ef just below it.
   const auto base = Gaussian(3000, 16, 31);
   const auto queries = Gaussian(100, 16, 32);
   const auto gt = ars::BruteForceKnn(base, queries, 10);
@@ -245,11 +219,8 @@ TEST(OracleEndToEnd, LabelIsMinimalEfOnRealSearchCurves) {
     }
     EXPECT_LE(l.first_reach_index, l.index);
   }
-  // A weak index (M=8, efC=40) should give queries of differing difficulty.
   EXPECT_GT(distinct_labels.size(), 1U);
 }
-
-// ---------------------------------------------------------------- config ---
 
 TEST(OracleConfig, FixedFileSplitNeedsNoSeedOrSize) {
   const std::string text = R"(experiment_name: o
@@ -314,7 +285,7 @@ oracle:
   EXPECT_DOUBLE_EQ(c.target_recall, 0.95);
   EXPECT_EQ(c.recall_definition, "tie_aware");
   EXPECT_EQ(c.ef_grid_max, 100U);
-  EXPECT_EQ(c.index.seed, 42U);  // shared S0 sections parsed too
+  EXPECT_EQ(c.index.seed, 42U);
 
   std::string bad = base;
   bad.replace(bad.find("tie_aware"), 9, "fuzzy");

@@ -1,10 +1,5 @@
-"""Experiment C (design_doc.md Addendum C1, C1.9): train the DARTH recall
-predictor on the S0 training traces and freeze the complete policy.
-
-Independent re-implementation (THIRD_PARTY.md). Frozen settings only:
-LGBMRegressor(objective="regression", n_estimators=100, random_state=42,
-verbose=-1), all other parameters default; all observation rows; intervals
-from the published heuristic (ipi = int(dists_Rt / 2), mpi = int(dists_Rt / 10)).
+"""Trains the DARTH recall predictor on the S0 training traces and freezes the policy.
+Only the frozen settings are used.
 
 Usage: python python/exp_c_train.py configs/exp_c/darth_s0.yaml <trace_run_dir>
 """
@@ -24,7 +19,7 @@ FEATURES = ["step", "dists", "inserts", "first_nn_dist", "nn_dist", "furthest_di
             "avg_dist", "variance", "percentile_25", "percentile_50", "percentile_75"]
 TARGET_RECALL = 0.95
 SEED = 42
-INDEX_SHA256 = "4282e2e2"  # prefix recorded in notes (S0 rebuild check); full hash computed below
+INDEX_SHA256 = "4282e2e2"
 
 
 def sha(p):
@@ -51,7 +46,6 @@ def main() -> int:
     assert len(raw) == tmeta["observations"]
     qid = raw[:, 0].astype(np.int64)
 
-    # ---- leakage check: every observation comes from a TRAIN-split query -----
     split = pd.read_csv(C["split_path"])
     train_ids = set(split.loc[split.split == "train", "query_id"])
     assert len(train_ids) == 8000
@@ -63,13 +57,11 @@ def main() -> int:
     if not np.isfinite(raw).all() or y.min() < 0 or y.max() > 1:
         raise SystemExit("STOP: non-finite values or labels outside [0, 1]")
 
-    # ---- published interval heuristic --------------------------------------------
     df = pd.DataFrame({"qid": qid, "dists": X["dists"].to_numpy(), "r": y})
     reached = df[df.r >= TARGET_RECALL].groupby("qid", sort=False)["dists"].min()
     dists_rt = float(reached.mean())
     ipi, mpi = int(dists_rt / 2), int(dists_rt / 10)
 
-    # ---- trace statistics ------------------------------------------------------------
     per_q = df.groupby("qid").agg(n=("r", "size"), final_r=("r", "last"), max_d=("dists", "max"))
     tq = pd.read_csv(trace_run / "trace_queries.csv")
     stats = {
@@ -86,8 +78,6 @@ def main() -> int:
         "label_mean": float(y.mean()),
     }
 
-    # ---- train (frozen settings) twice: determinism check -----------------------------
-    # Optional per-seed keys (Experiment E replication); defaults = seed-42 C1.
     model_path = Path(C.get("model_out", "derived/exp_c/darth_lgbm_s0.txt"))
     model_path.parent.mkdir(parents=True, exist_ok=True)
     t0 = dt.datetime.now()

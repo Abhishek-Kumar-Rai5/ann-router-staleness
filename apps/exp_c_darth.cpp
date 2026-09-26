@@ -1,13 +1,9 @@
-// Experiment C (design_doc.md Addendum C1): DARTH re-implementation driver.
-//
-//   exp_c_darth verify <config.yaml>  plain stop-condition search == searchKnn
-//                                     (ids, order, distances, distance counts)
-//   exp_c_darth trace  <config.yaml>  training traces, TRAIN split only
-//   exp_c_darth eval   <config.yaml>  frozen DARTH policy, TEST split only
-//   exp_c_darth predict_check <config.yaml>  C++ model predictions on trace
-//   rows
-//
-// Each run writes results/<experiment_id>/ with config.yaml and metadata.json.
+// DARTH re-implementation driver (Experiment C). Modes:
+//   verify         plain stop-condition search must match searchKnn exactly
+//   trace          collect training traces (train split only)
+//   eval           run the frozen DARTH policy (test split only)
+//   predict_check  compare C++ model predictions with the Python ones
+// Usage: exp_c_darth <mode> <config.yaml>
 
 #include <yaml-cpp/yaml.h>
 
@@ -51,7 +47,7 @@ struct Config {
   std::size_t ef_cap = 0;
   std::vector<std::size_t> verify_efs;
   std::string trace_dir;
-  std::string policy_path;  // eval: frozen policy (YAML/JSON)
+  std::string policy_path;
   std::string output_dir;
   int threads = 1;
 };
@@ -113,7 +109,6 @@ darth::Params PlainParams(const Ctx& c, std::size_t ef) {
   return p;
 }
 
-// ------------------------------------------------------------------ verify --
 std::string Verify(Ctx& c) {
   std::string per_ef = "[";
   bool all_ok = true;
@@ -132,8 +127,6 @@ std::string Verify(Ctx& c) {
           c.index.SearchWithStopCondition(c.queries.Row(q), c.cfg.k, sc);
       ok[q] = SameResult(r, ref[q]) && !sc.stopped_early() ? 1 : 0;
       dc[q] = r.distance_computations;
-      // Mismatch classes: 1 distance count, 2 distances, 3 id set,
-      // 4 order only (same ids and distances).
       if (ok[q] == 0) {
         auto sa = r.labels;
         auto sb = ref[q].labels;
@@ -174,7 +167,6 @@ std::string Verify(Ctx& c) {
       .Render();
 }
 
-// ------------------------------------------------------------------- trace --
 std::string Trace(Ctx& c) {
   const auto rows = Rows(c.split, ars::Split::kTrain);
   const auto ref =
@@ -202,7 +194,6 @@ std::string Trace(Ctx& c) {
     throw std::runtime_error("STOP: trace-mode search differs from searchKnn");
   }
   fs::create_directories(c.cfg.trace_dir);
-  // Row-major float64: query_id, 11 features (C1.9 order), recall_id.
   const fs::path bin = fs::path(c.cfg.trace_dir) / "trace_train.f64";
   std::ofstream b(bin, std::ios::binary);
   for (std::size_t i = 0; i < rows.size(); ++i) {
@@ -242,7 +233,6 @@ std::string Trace(Ctx& c) {
       .Render();
 }
 
-// -------------------------------------------------------------------- eval --
 std::string Eval(Ctx& c) {
   const YAML::Node pol = YAML::LoadFile(c.cfg.policy_path);
   darth::Params p = PlainParams(c, pol["ef_cap"].as<std::size_t>());
@@ -261,7 +251,6 @@ std::string Eval(Ctx& c) {
   const darth::Predictor model(pol["model_path"].as<std::string>());
   const auto rows = Rows(c.split, ars::Split::kTest);
 
-  // Warm-up pass (plain, ef_cap) so the timed passes see a warm cache.
   for (const std::size_t q : rows) {
     (void)c.index.Search(c.queries.Row(q), c.cfg.k, c.cfg.ef_cap);
   }
@@ -272,7 +261,6 @@ std::string Eval(Ctx& c) {
          "predictor_seconds,last_predicted,recall_id,recall_tie_aware,"
          "wall_seconds,plain_ef50_seconds,plain_ef53_seconds,"
          "plain_ef50_dc,plain_ef53_dc,labels\n";
-  // Single-threaded, sequential: wall-clock timing is per query.
   for (const std::size_t q : rows) {
     darth::StopCondition sc(p, darth::Mode::kPredict, &model, nullptr);
     const auto t0 = Clock::now();
@@ -312,10 +300,6 @@ std::string Eval(Ctx& c) {
       .Render();
 }
 
-// ----------------------------------------------------------- predict_check --
-// C++ predictions for every 997th trace row (deterministic subsample), to be
-// compared with the Python LightGBM predictions: model loading and feature
-// order must agree between training and the runtime.
 std::string PredictCheck(Ctx& c) {
   const YAML::Node pol = YAML::LoadFile(c.cfg.policy_path);
   const darth::Predictor model(pol["model_path"].as<std::string>());
@@ -328,6 +312,8 @@ std::string PredictCheck(Ctx& c) {
   std::size_t i = 0;
   std::size_t n = 0;
   while (b.read(reinterpret_cast<char*>(row.data()), sizeof(row))) {
+    // A fixed subsample is enough to confirm C++ and Python load the model and
+    // order the features the same way.
     if (i % 997 == 0) {
       darth::Features x{};
       std::copy(row.begin() + 1, row.begin() + 1 + darth::kNumFeatures,

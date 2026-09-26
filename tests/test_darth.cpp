@@ -1,6 +1,3 @@
-// Experiment C (design_doc.md C1.9): DARTH re-implementation — feature
-// arithmetic, plain-mode equivalence with hnswlib searchKnn, trace labels.
-
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -33,17 +30,17 @@ TEST(DarthFeatures, FrozenOrderAndArithmetic) {
   const auto f = darth::MakeFeatures(4, 120, 17, 42.5F, kbest);
   EXPECT_EQ(darth::kFeatureNames[5], std::string("furthest_dist"));
   EXPECT_EQ(darth::kFeatureNames[6], std::string("avg_dist"));
-  EXPECT_DOUBLE_EQ(f[0], 4);     // step
-  EXPECT_DOUBLE_EQ(f[1], 120);   // dists
-  EXPECT_DOUBLE_EQ(f[2], 17);    // inserts
-  EXPECT_DOUBLE_EQ(f[3], 42.5);  // first_nn_dist
-  EXPECT_DOUBLE_EQ(f[4], 1);     // nn_dist
-  EXPECT_DOUBLE_EQ(f[5], 10);    // furthest_dist
-  EXPECT_DOUBLE_EQ(f[6], 5.5);   // avg_dist
-  EXPECT_DOUBLE_EQ(f[7], 8.25);  // population variance
-  EXPECT_DOUBLE_EQ(f[8], 3);     // index floor(0.25*9) = 2
-  EXPECT_DOUBLE_EQ(f[9], 5);     // index floor(0.50*9) = 4
-  EXPECT_DOUBLE_EQ(f[10], 7);    // index floor(0.75*9) = 6
+  EXPECT_DOUBLE_EQ(f[0], 4);
+  EXPECT_DOUBLE_EQ(f[1], 120);
+  EXPECT_DOUBLE_EQ(f[2], 17);
+  EXPECT_DOUBLE_EQ(f[3], 42.5);
+  EXPECT_DOUBLE_EQ(f[4], 1);
+  EXPECT_DOUBLE_EQ(f[5], 10);
+  EXPECT_DOUBLE_EQ(f[6], 5.5);
+  EXPECT_DOUBLE_EQ(f[7], 8.25);
+  EXPECT_DOUBLE_EQ(f[8], 3);
+  EXPECT_DOUBLE_EQ(f[9], 5);
+  EXPECT_DOUBLE_EQ(f[10], 7);
 }
 
 void ExpectPlainEqualsSearchKnn(ars::HnswIndex& idx,
@@ -102,14 +99,13 @@ TEST(DarthTraceMode, LabelsAreIdRecallAndSearchUnchanged) {
     const auto& obs = sc.observations();
     ASSERT_FALSE(obs.empty());
     EXPECT_LE(obs.size(), static_cast<std::size_t>(sc.dists()));
-    // Last observation's label = id recall of the final k-best.
     EXPECT_DOUBLE_EQ(obs.back().recall,
                      ars::RecallAtK(gt.ids.Row(i), sc.KBestLabels(), 10));
     for (std::size_t j = 1; j < obs.size(); ++j) {
-      EXPECT_GE(obs[j].x[1], obs[j - 1].x[1]);  // dists non-decreasing
-      EXPECT_GE(obs[j].x[2], obs[j - 1].x[2]);  // inserts non-decreasing
-      EXPECT_LE(obs[j].x[4], obs[j - 1].x[4]);  // nn_dist non-increasing
-      EXPECT_LE(obs[j].x[5], obs[j - 1].x[5]);  // furthest non-increasing
+      EXPECT_GE(obs[j].x[1], obs[j - 1].x[1]);
+      EXPECT_GE(obs[j].x[2], obs[j - 1].x[2]);
+      EXPECT_LE(obs[j].x[4], obs[j - 1].x[4]);
+      EXPECT_LE(obs[j].x[5], obs[j - 1].x[5]);
       EXPECT_GE(obs[j].x[2], 10);
     }
   }

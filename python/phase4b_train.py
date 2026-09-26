@@ -1,15 +1,4 @@
-"""Phase 4b: train and FREEZE the routers — TRAINING SPLIT ONLY.
-
-Reads only split == "train" rows (asserted). Never touches the old test split's
-labels or curves, and the confirmation set does not exist yet. Everything is
-driven by configs/phase4b/router_train.yaml.
-
-Outputs: results/phase4b_train_<cfg-hash>_<ts>/
-  routers/<seed>/<variant>/<contract>_<level>.json   frozen router specs
-  models/<seed>/<variant>/<family>/cand_<j>.{joblib,json}
-  folds/<seed>.csv                                   CV fold assignment
-  diagnostics.json, diagnostics_rows.csv             TRAINING/CV diagnostics
-  manifest.json (SHA-256 of every file), metadata.json, TRAINING_RECORD.md
+"""Trains and freezes the Phase 4b routers using training rows only.
 
 Usage: python python/phase4b_train.py configs/phase4b/router_train.yaml
 """
@@ -43,7 +32,6 @@ def sh(*cmd):
 
 
 def load_seed(seed_cfg):
-    """Train rows only, for one index seed."""
     feats = pd.read_csv(Path(seed_cfg["features_run"]) / "features.csv")
     feats = feats[feats["split"] == "train"].sort_values("query_id").reset_index(drop=True)
     labels = pd.read_csv(Path(seed_cfg["oracle_run"]) / "oracle_labels.csv")
@@ -126,7 +114,6 @@ def main() -> int:
         Sg = Rg >= target - TOL
         sd = {"variants": {}, "b1": {}, "oracles": {}}
 
-        # Variant matrices and labels.
         vdefs = {}
         p = cfg["variants"]["primary"]
         vdefs["primary"] = (p["features"], p["probe_ef"], p["probe_cost"])
@@ -141,8 +128,6 @@ def main() -> int:
                                          curves, q, target)
             ys[v] = rb.candidate_oracle_index(mats[v]["success"])
 
-        # Folds: stratified on the PRIMARY candidate-oracle index (same folds
-        # for every variant of this seed).
         skf = StratifiedKFold(cfg["cv"]["folds"], shuffle=cfg["cv"]["shuffle"],
                               random_state=cfg["cv"]["seed"])
         fold = np.empty(len(q), int)
@@ -153,7 +138,6 @@ def main() -> int:
             od / "folds" / f"{seed}.csv", index=False)
         y_counts = np.bincount(ys["primary"], minlength=m + 1).tolist()
 
-        # Contract oracles (per variant, needed for regret).
         def oracle_fn(v, contract):
             M = mats[v]
 
@@ -222,7 +206,6 @@ def main() -> int:
                 vd["families"][fam] = fd
             sd["variants"][v] = vd
 
-        # B1 (training-only two-ef mixture) and the three oracle references.
         for contract, levels, lvl_by_ef, qual_g in (
                 ("per_query", cfg["per_query_levels"], Sg.mean(0), Sg.astype(float)),
                 ("mean_recall", cfg["mean_recall_levels"], Rg.mean(0), Rg)):
@@ -269,7 +252,6 @@ def main() -> int:
         }
         diag["seeds"][str(seed)] = sd
 
-    # ---- selection and freezing --------------------------------------------
     df = pd.DataFrame(rows)
     df.to_csv(od / "diagnostics_rows.csv", index=False)
     frozen = []

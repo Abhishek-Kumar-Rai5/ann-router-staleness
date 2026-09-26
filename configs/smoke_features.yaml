@@ -1,6 +1,4 @@
-# Smoke test for Phase 3 feature extraction on a SIFT subsample (< 1 min).
-# §9, §21). dataset/index/ground_truth/paths are identical to Phases 1-2, so
-# the cached S0 index is reused. No ground truth or oracle label is read.
+# Quick check of Phase 3 feature extraction on a SIFT subsample (under a minute).
 experiment_name: smoke_features_sift
 
 dataset:
@@ -26,11 +24,8 @@ split:
   path: data/cache/smoke_split_200_seed20261001.csv
 
 features:
-  # Core probe: the cheapest search hnswlib allows at k=10 (it uses
-  # max(ef, k), so ef < 10 is identical to ef = 10). Fixed by design, not tuned.
   probe_k: 10
   probe_ef: 10
-  # LID ablation (§9: "second-tier, more expensive"): a separate, deeper probe.
   lid_k: 20
   lid_ef: 20
   threads: 16

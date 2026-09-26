@@ -1,15 +1,6 @@
-// Phase 5' (design_doc.md Addendum A1): produce nested evolved index states.
-//
-// insert: rebuild S0 in-process exactly as the cached S0 was built (same
-//   config, single-threaded, same capacity), save it and require it to be
-//   byte-identical to the cached S0 file, then resize (public API) and insert
-//   pool vectors in the configured order; after each count, save the state.
-//   Inserted labels continue after the base: N0, N0+1, ...
-// delete: load the cached S0 and lazily delete base labels in the configured
-//   order (markDelete); after each count, save the state and its deleted list.
-// hnswlib's level RNG is never touched: insertion continues the seeded stream
-// of the in-process build.
-//
+// Builds the nested evolved index states (inserts or lazy deletes).
+// For inserts, S0 is first rebuilt in-process and must be byte-identical to
+// the cached S0, so the inserts continue the same seeded level RNG stream.
 // Usage: ars_evolve <config.yaml>
 
 #include <chrono>

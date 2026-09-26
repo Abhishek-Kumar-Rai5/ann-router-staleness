@@ -1,8 +1,5 @@
-"""Recall-vs-efSearch curve for a Phase 1 static sweep.
-
-Reads <run_dir>/results.csv (one row per query x ef), aggregates per ef, and
-writes <run_dir>/recall_vs_ef.png plus <run_dir>/sweep_summary.csv. The
-summary is derived data for convenience; results.csv remains the record.
+"""Plots recall against efSearch for a Phase 1 sweep. results.csv stays the record;
+the summary it writes is just for convenience.
 
 Usage: python python/plot_recall_ef.py results/<experiment_id>
 """

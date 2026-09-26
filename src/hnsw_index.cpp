@@ -99,7 +99,6 @@ SearchResult HnswIndex::SearchAtCurrentEf(const float* query,
   r.distance_computations = counter;
   r.labels.resize(heap.size());
   r.dists.resize(heap.size());
-  // hnswlib returns a max-heap; fill from the back to get ascending order.
   for (std::size_t i = heap.size(); i-- > 0;) {
     r.dists[i] = heap.top().first;
     r.labels[i] = heap.top().second;
@@ -114,10 +113,8 @@ SearchResult HnswIndex::SearchWithStopCondition(
   std::uint64_t& counter = CountingL2Space::ThreadCount();
   counter = 0;
   auto res = hnsw_->searchStopConditionClosest(query, cond);
-  // Mirror searchKnn + SearchAtCurrentEf exactly: hnswlib returns the result
-  // heap in pop order (res[0] popped last), and searchKnn keeps the k entries
-  // popped last; those k are then ordered by (distance, label). This only
-  // matters for equidistant (duplicate) vectors.
+  // Pick and order results exactly like searchKnn does. This only matters
+  // when several vectors are at the same distance.
   const std::size_t n = std::min(k, res.size());
   std::sort(res.begin(), res.begin() + static_cast<std::ptrdiff_t>(n));
   SearchResult r;

@@ -1,8 +1,6 @@
-// Phase 5' validation (read-only): for an evolved state, search every query at
-// several efSearch values and count returned labels that are lazily deleted or
-// outside the state's labelled vectors. Prints one JSON line.
-//
-// Usage: ars_check_state <features-style state config.yaml>
+// Read-only sanity check for an evolved state: searches every query at a few
+// ef values and counts results that are deleted or out of range.
+// Usage: ars_check_state <config.yaml>
 
 #include <exception>
 #include <iostream>

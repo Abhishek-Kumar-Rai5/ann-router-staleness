@@ -1,5 +1,3 @@
-"""Unit tests for the Phase 5' order constructions (python/phase5_lib.py)."""
-
 import sys
 from pathlib import Path
 
@@ -11,7 +9,7 @@ import phase5_lib as L  # noqa: E402
 
 def test_fisher_yates_matches_cpp_golden_and_is_a_permutation():
     p = L.fisher_yates(20, 1)
-    assert sorted(p[:5].tolist()) == [1, 7, 10, 14, 17]   # C++ MakeQuerySplit golden
+    assert sorted(p[:5].tolist()) == [1, 7, 10, 14, 17]
     q = L.fisher_yates(1000, 7)
     assert sorted(q.tolist()) == list(range(1000))
     assert (L.fisher_yates(1000, 7) == q).all()
@@ -30,8 +28,8 @@ def test_ood_order_is_nested_balls_in_id_order():
     prev = 0
     for c in counts:
         inc = order[prev:c]
-        assert set(inc.tolist()) == set(by_dist[prev:c].tolist())   # exact ball increment
-        assert (np.diff(rank[inc]) > 0).all()                       # inserted in ID order
+        assert set(inc.tolist()) == set(by_dist[prev:c].tolist())
+        assert (np.diff(rank[inc]) > 0).all()
         prev = c
     assert d[a] == 0
 
@@ -46,6 +44,5 @@ def test_sift_pool_excludes_query_copies_dedups_and_drops_rows():
     learn = np.array([[1, 1], [2, 2], [1, 1], [3, 3], [4, 4], [5, 5]], dtype=np.float32)
     queries = np.array([[3, 3]], dtype=np.float32)
     vec, rows = L.sift_pool(learn, queries, exclude_rows=[4])
-    # row 2 duplicates row 0 (lowest kept), row 3 is a query copy, row 4 is excluded.
     assert rows.tolist() == [0, 1, 5]
     assert np.array_equal(vec, learn[[0, 1, 5]])

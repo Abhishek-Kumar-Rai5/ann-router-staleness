@@ -35,11 +35,11 @@ OracleLabel DeriveOracleLabel(const std::vector<double>& recall_by_ef,
 
   OracleLabel label;
   const std::size_t n = recall_by_ef.size();
+  // Never reached even at the largest ef: the label is censored.
   if (!meets(recall_by_ef[n - 1])) {
-    return label;  // not reached at the largest ef: censored
+    return label;
   }
   label.reached = true;
-  // Walk down from the top while the target still holds.
   std::size_t i = n - 1;
   while (i > 0 && meets(recall_by_ef[i - 1])) {
     --i;

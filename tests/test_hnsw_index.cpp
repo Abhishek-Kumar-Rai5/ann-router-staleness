@@ -1,6 +1,3 @@
-// Index management: search correctness against brute force, exact distance
-// counting, save/load round trip, and seeded reproducibility.
-
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -92,7 +89,6 @@ TEST(HnswIndex, DistanceCountIsPerQueryAndGrowsWithEf) {
     EXPECT_GT(small.distance_computations, 0U);
     EXPECT_LT(small.distance_computations, base.rows);
     EXPECT_GT(large.distance_computations, small.distance_computations);
-    // Counter is reset per search: repeating gives the identical count.
     EXPECT_EQ(index.Search(queries.Row(q), 10, 10).distance_computations,
               small.distance_computations);
   }

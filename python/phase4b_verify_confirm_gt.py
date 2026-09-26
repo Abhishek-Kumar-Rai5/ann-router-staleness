@@ -1,10 +1,9 @@
-"""Independent check of the confirmation-set ground truth (NumPy float64 brute
-force over all 1M base vectors; shares no code with the C++ ground truth).
-Exact for integer-valued SIFT. Compares the top-100 distance profile and the
-top-10 sets (ties allowed: a differing id must be equidistant).
+"""Independent NumPy check of the confirmation-set ground truth. It shares no code
+with the C++ ground truth.
 
 Usage: python python/phase4b_verify_confirm_gt.py <oracle_run_dir>
 """
+
 import json
 import sys
 from pathlib import Path

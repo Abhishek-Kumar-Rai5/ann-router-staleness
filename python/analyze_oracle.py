@@ -1,23 +1,5 @@
-"""Validate and summarise a Phase 2 oracle run (design doc §21 checkpoint).
-
-Checks (each recorded as pass/fail in oracle_report.json):
-  split       sizes match config; each query exactly once; the split column in
-              every output file agrees with split.csv; the stored split file is
-              byte-identical to the run's copy.
-  complete    every query has a full curve (one row per grid ef) and one label
-              row; reached labels have every field; censored ones are listed.
-  rederive    labels re-derived from oracle_curves.csv by an independent
-              Python implementation of the label rule match the C++ labels.
-  phase1      for ef values in both grids, the oracle curves (parallel
-              SearchBatch) equal the Phase 1 rows (serial Search) exactly.
-  nondegen    the oracle-ef distribution is non-degenerate (criteria below).
-  beats_fixed the oracle uses fewer distance computations than the cheapest
-              fixed ef reaching the same mean recall (§21: "oracle beats
-              fixed-ef baselines at matched recall").
-
-Distributions and comparisons are reported per split. The training split is
-the one later used for router fitting; test-split figures are descriptive
-only — nothing in Phase 2 is selected or tuned from them.
+"""Checks and summarises a Phase 2 oracle run. Each check is written as pass/fail
+to oracle_report.json. Test-split numbers are descriptive only; nothing is tuned on them.
 
 Usage: python python/analyze_oracle.py <oracle_run_dir> [--phase1 <run_dir>]
 """
@@ -37,14 +19,13 @@ import yaml  # noqa: E402
 
 TOL = 1e-9
 
-# Non-degeneracy criteria, fixed before looking at the SIFT1M distribution.
-MIN_DISTINCT_LABELS = 10      # oracle uses at least 10 different ef values
-MAX_SINGLE_LABEL_SHARE = 0.5  # no one ef value labels more than half the set
-MIN_P90_OVER_P10 = 2.0        # 90th/10th percentile oracle ef ratio
+# Fixed before looking at the SIFT1M distribution.
+MIN_DISTINCT_LABELS = 10
+MAX_SINGLE_LABEL_SHARE = 0.5
+MIN_P90_OVER_P10 = 2.0
 
 
 def stable_reach_index(recall: np.ndarray, target: float):
-    """Python reimplementation of ars::DeriveOracleLabel (stable reach)."""
     ok = recall >= target - TOL
     if not ok[-1]:
         return None, None
@@ -60,7 +41,6 @@ def check(report, name, passed, **details):
 
 
 def matched_recall(curves_split, labels_split, grid, rcol):
-    """Oracle policy vs the fixed-ef family on one query subset."""
     eff_ef = labels_split["oracle_ef"].fillna(grid[-1]).astype(int)
     pick = curves_split.merge(
         pd.DataFrame({"query_id": labels_split["query_id"], "ef": eff_ef}),
@@ -84,7 +64,6 @@ def matched_recall(curves_split, labels_split, grid, rcol):
         })
     else:
         out["cheapest_fixed_ef_matching_recall"] = None
-    # Reverse view: best fixed-ef recall within the oracle's mean budget.
     within = fixed[fixed["cost"] <= oracle_cost]
     if len(within):
         out["fixed_recall_at_oracle_budget"] = float(within["recall"].max())
@@ -135,7 +114,6 @@ def main() -> int:
               "recall_definition": rdef, "grid_size": len(grid),
               "grid_min": grid[0], "grid_max": grid[-1], "checks": {}}
 
-    # --- split ---------------------------------------------------------------
     n_test = int((split["split"] == "test").sum())
     stored = Path(cfg["split"]["path"])
     stored_same = stored.exists() and stored.read_bytes() == (run / "split.csv").read_bytes()
@@ -153,7 +131,6 @@ def main() -> int:
           stored_file=str(stored), stored_file_identical=bool(stored_same),
           fnv1a64=meta["split"]["fnv1a64_of_csv"])
 
-    # --- completeness --------------------------------------------------------
     per_q = curves.groupby("query_id")["ef"].apply(list)
     full_curves = len(per_q) == nq and all(v == grid for v in per_q)
     reached = labels[labels["reached"] == 1]
@@ -172,7 +149,6 @@ def main() -> int:
           censored_splits=labels.loc[labels["reached"] == 0, "split"]
           .value_counts().to_dict())
 
-    # --- independent re-derivation -------------------------------------------
     rmat = curves.pivot(index="query_id", columns="ef", values=rcol)[grid].to_numpy()
     mismatches = []
     first_differs = 0
@@ -190,7 +166,6 @@ def main() -> int:
     check(report, "rederive", not mismatches, mismatches=mismatches[:20],
           queries_where_first_reach_differs_from_stable=first_differs)
 
-    # --- Phase 1 cross-check -------------------------------------------------
     if args.phase1:
         p1 = pd.read_csv(Path(args.phase1) / "results.csv")
         common = sorted(set(p1["ef"]) & set(grid))
@@ -201,7 +176,6 @@ def main() -> int:
         check(report, "phase1", same and len(m) == len(common) * nq,
               common_ef_values=common, rows_compared=len(m))
 
-    # --- distributions -------------------------------------------------------
     report["distribution"] = {
         s: describe(labels[labels["split"] == s], grid) for s in ("train", "test")}
     tr = report["distribution"]["train"]
@@ -214,7 +188,6 @@ def main() -> int:
                     "max_single_share": MAX_SINGLE_LABEL_SHARE,
                     "min_p90_over_p10": MIN_P90_OVER_P10})
 
-    # --- oracle vs fixed ef at matched recall --------------------------------
     report["matched_recall"] = {}
     fixed_curves = {}
     for s in ("train", "test"):
@@ -227,7 +200,6 @@ def main() -> int:
           mtr.get("fixed_over_oracle_cost") is not None
           and mtr["fixed_over_oracle_cost"] > 1.0, evaluated_on="train")
 
-    # --- sensitivity (descriptive, not used for any choice) -----------------
     sens = {}
     for alt_def, col in (("tie_aware", "recall_tie_aware"), ("id", "recall")):
         m_alt = curves.pivot(index="query_id", columns="ef", values=col)[grid].to_numpy()
@@ -244,7 +216,6 @@ def main() -> int:
     report["all_checks_pass"] = all(c["pass"] for c in report["checks"].values())
     (run / "oracle_report.json").write_text(json.dumps(report, indent=2) + "\n")
 
-    # --- figure --------------------------------------------------------------
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.4))
     bins = np.array(grid + [grid[-1] * 1.05])
     for s, c in (("train", "C0"), ("test", "C1")):

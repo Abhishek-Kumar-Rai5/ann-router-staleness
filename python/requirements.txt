@@ -1,18 +1,13 @@
-# Analysis/plotting only (CLAUDE.md: Python is for training, stats, plots,
-# orchestration). Versions pinned as installed on 2026-10-01.
 matplotlib==3.11.2
 numpy==2.5.3
 pandas==3.0.6
 PyYAML==6.0.3
-# Added Phase 4 (2026-10-02): router fitting, statistics, Python tests.
 scikit-learn==1.9.1
 scipy==1.18.1
 joblib==1.6.0
 pytest==9.1.1
-# Added Experiment C (2026-10-04): DARTH recall-predictor training. Must match the
-# C++ LightGBM (third_party/LightGBM, v4.6.0) that loads the model at search time.
+# Must match the C++ LightGBM version in third_party/LightGBM (v4.6.0).
 lightgbm==4.6.0
-# Added Experiment E (2026-10-05): mixed-effects trend models (design freeze v2 §11).
 statsmodels==0.15.0
 patsy==1.0.3
 formulaic==1.2.2

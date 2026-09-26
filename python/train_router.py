@@ -1,21 +1,5 @@
-"""Phase 4 router training — TRAINING SPLIT ONLY.
-
-Implements the pre-registered rule (docs/notes.md, Phase 4 PRE-REGISTRATION):
-5-fold stratified CV over the candidates, feasibility constraint on the
-out-of-fold failure rate, matched-recall cost ratio as the score, ties to the
-simplest model. The winner is refit on all training queries and frozen.
-
-Test-split rows are never loaded: every input is filtered to split == "train"
-at read time (router_lib.load_split_frame / load_curves).
-
-Outputs in results/<experiment_id>/:
-  cv_candidates.csv        per-candidate CV scores (primary + single-feature)
-  oof_predictions.csv      out-of-fold tier predictions, one row per train query
-  model_<role>.joblib      frozen fitted routers: primary, single_feature,
-                           lid_ablation (+ SHA-256 in metadata.json)
-  model_<role>.json        sklearn-free export (thresholds / coefficients)
-  model_primary_rules.txt  human-readable rules if the primary is a tree
-  metadata.json
+"""Trains the Phase 4 router on the training split only, then freezes it.
+Test rows are never loaded.
 
 Usage: python python/train_router.py configs/phase4_router_sift1m.yaml
 """
@@ -49,7 +33,6 @@ def git_info():
 
 
 def cv_evaluate(name, features, train, curves, tier_ef, probe_col, cfg):
-    """Out-of-fold predictions and the pre-registered score for one candidate."""
     seed = cfg["router"]["seed"]
     X = train[features].to_numpy()
     y = train["tier_label"].to_numpy()
@@ -57,7 +40,7 @@ def cv_evaluate(name, features, train, curves, tier_ef, probe_col, cfg):
     skf = StratifiedKFold(cfg["router"]["cv_folds"], shuffle=True,
                           random_state=seed)
     for tr_idx, va_idx in skf.split(X, y):
-        model = rl.make_candidate(name, seed)   # fresh, fit on 4/5 only
+        model = rl.make_candidate(name, seed)
         model.fit(X[tr_idx], y[tr_idx])
         oof[va_idx] = model.predict(X[va_idx])
     target = cfg["target_recall"]
@@ -113,7 +96,6 @@ def main() -> int:
     assert set(curves.recall.index) == set(train["query_id"])
     feats = cfg["router"]["features"]
 
-    # 1. Primary candidates.
     rows, oofs = [], {}
     for name in cfg["router"]["candidates"]:
         oof, r = cv_evaluate(name, feats, train, curves, tier_ef,
@@ -124,7 +106,6 @@ def main() -> int:
     prim = pd.DataFrame(rows)
     chosen = rl.select_candidate(prim, cfg["router"]["tie_tolerance"])
 
-    # 2. Single-feature threshold router: feature chosen by the same CV score.
     srows = []
     for f in cfg["router"]["single_feature_candidates"]:
         _, r = cv_evaluate("SINGLE", [f], train, curves, tier_ef,
@@ -134,7 +115,6 @@ def main() -> int:
     single = pd.DataFrame(srows)
     single_feat = single.sort_values("score", ascending=False)["features"].iloc[0]
 
-    # 3. LID ablation: chosen configuration + lid; pays both probes.
     train["probe_plus_lid_dc"] = (train["probe_distance_computations"]
                                   + train["lid_probe_distance_computations"])
     lid_feats = feats + [cfg["router"]["ablation_feature"]]
@@ -148,7 +128,6 @@ def main() -> int:
                   **{f"oof_{k}": v for k, v in oofs.items()}}).to_csv(
         out_dir / "oof_predictions.csv", index=False)
 
-    # 4. Refit the winners on ALL training queries and freeze them.
     seed = cfg["router"]["seed"]
     y = train["tier_label"].to_numpy()
     models = {}
@@ -163,7 +142,6 @@ def main() -> int:
     models["single_feature"]["candidate"] = "SINGLE"
     models["lid_ablation"]["candidate"] = chosen
     models["lid_ablation"]["probe_cost"] = "core probe + LID probe"
-    # Self-check: the sklearn-free export reproduces the fitted model.
     for role, m in (("primary", primary), ("single_feature", single_m),
                     ("lid_ablation", lid_m)):
         fs = models[role]["features"]

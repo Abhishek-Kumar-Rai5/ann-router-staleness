@@ -1,6 +1,6 @@
-"""Phase 5' helpers (design_doc.md Addendum A1): vecs I/O, the reference
-MT19937-64 Fisher-Yates (identical to ars::MakeQuerySplit's permutation),
-and the A1.4 insertion/deletion order constructions."""
+"""Phase 5' helpers: vecs I/O, a Python copy of the C++ seeded shuffle, and the
+insertion/deletion orders.
+"""
 
 import numpy as np
 
@@ -30,7 +30,6 @@ def write_fvecs(path, m):
 
 
 class MT64:
-    """Reference MT19937-64 (std::mt19937_64)."""
 
     def __init__(self, seed):
         self.mt = [0] * 312
@@ -57,8 +56,8 @@ class MT64:
         return x & M64
 
 
+# Must produce exactly the same permutation as ars::MakeQuerySplit.
 def fisher_yates(n, seed):
-    """Permutation of 0..n-1 exactly as ars::MakeQuerySplit builds it."""
     r = MT64(seed)
     p = list(range(n))
     for i in range(n - 1, 0, -1):
@@ -78,12 +77,10 @@ def id_order(n_pool, seed):
 
 
 def ood_order(pool, counts, id_perm, anchor_seed):
-    """A1.4(4): nested nearest-neighbour balls around a seeded anchor; each
-    increment inserted in ID-permutation order."""
     a = int(np.random.default_rng(anchor_seed).integers(0, len(pool)))
     p64 = pool.astype(np.float64)
     d = np.sqrt(((p64 - p64[a]) ** 2).sum(1))
-    by_dist = np.lexsort((np.arange(len(pool)), d))      # distance, ties by row
+    by_dist = np.lexsort((np.arange(len(pool)), d))
     rank_in_id = np.empty(len(pool), dtype=np.int64)
     rank_in_id[id_perm] = np.arange(len(pool))
     order, prev = [], 0
@@ -101,9 +98,6 @@ def write_order(path, rows):
 
 
 def sift_pool(learn, queries, exclude_rows):
-    """A1.4(1): sift_learn rows in ascending order, minus byte-exact copies of
-    any query, deduplicated (lowest row kept), minus `exclude_rows` (the
-    confirmation-v2 sift_learn rows). Returns (vectors, source sift_learn rows)."""
     qset = {q.tobytes() for q in queries}
     seen, rows = set(), []
     for i, v in enumerate(learn):

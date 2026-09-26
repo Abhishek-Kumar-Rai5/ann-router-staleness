@@ -1,22 +1,5 @@
-"""Validate a Phase 3 feature run (design doc §21 checkpoint).
-
-Checkpoint (§21): "No NaNs or degenerate constants; at least one feature
-visibly correlates with the oracle label."
-
-Label-free checks (all queries — features are inputs, not outcomes):
-  finite      no NaN/inf in any feature (edge-case convention counts reported)
-  nonconst    every feature varies (std > 0, >= MIN_DISTINCT distinct values)
-  probe_cost  probe distance counts equal the Phase 1 rows at (k=10, ef=10)
-              — the probe is the same deterministic search
-  centroid    centroid_dist matches a NumPy recomputation of the base centroid
-  knn_bound   probe d_k >= exact d_k from the verified ground truth (an
-              approximate search can only overestimate)
-
-Label check — TRAINING SPLIT ONLY. Test-split oracle labels are never read:
-the labels file is filtered to split == "train" before it is joined.
-  correlates  at least one core feature has |Spearman rho| with the oracle ef
-              >= MIN_ABS_RHO and a bootstrap 95% CI excluding 0. Criteria fixed
-              before the correlation was computed.
+"""Checks a Phase 3 feature run: features are finite, actually vary, and at least
+one of them tracks the oracle ef. Oracle labels are read for the training split only.
 
 Usage:
   python python/analyze_features.py <features_run> --oracle <oracle_run>
@@ -59,7 +42,6 @@ def bootstrap_ci(x, y, rng):
     stats = []
     for _ in range(BOOTSTRAP):
         i = rng.integers(0, n, n)
-        # Re-rank inside each resample so ties are handled per resample.
         stats.append(spearman(x[i], y[i]))
     lo, hi = np.percentile(stats, [2.5, 97.5])
     return float(lo), float(hi)
@@ -82,7 +64,6 @@ def main() -> int:
     nq = len(feats)
     report = {"run": run.name, "num_queries": nq, "checks": {}}
 
-    # --- label-free checks (all queries) ------------------------------------
     finite = np.isfinite(feats[ALL].to_numpy()).all()
     check(report, "finite", finite,
           lid_zero=int((feats["lid"] == 0).sum()),
@@ -123,9 +104,8 @@ def main() -> int:
           probe_dk_equals_exact_fraction=float((np.abs(slack) < 1e-4).mean()),
           median_relative_overestimate=float(np.median(slack / exact_dk)))
 
-    # --- label check: TRAINING SPLIT ONLY -----------------------------------
     labels = pd.read_csv(Path(args.oracle) / "oracle_labels.csv")
-    labels = labels[labels["split"] == "train"]          # test never read
+    labels = labels[labels["split"] == "train"]  # test labels are never read
     assert set(labels["split"]) == {"train"}
     train = feats[feats["split"] == "train"].merge(
         labels[["query_id", "reached", "oracle_ef",
@@ -152,7 +132,6 @@ def main() -> int:
     report["train_feature_intercorrelation"] = (
         train[ALL].rank().corr().round(4).to_dict())
 
-    # Descriptive feature distributions (inputs only; per split).
     report["feature_quantiles"] = {
         s: {f: {str(p): float(feats.loc[feats["split"] == s, f].quantile(p))
                 for p in (0.01, 0.25, 0.5, 0.75, 0.99)} for f in ALL}
@@ -161,7 +140,6 @@ def main() -> int:
     report["all_checks_pass"] = all(c["pass"] for c in report["checks"].values())
     (run / "feature_report.json").write_text(json.dumps(report, indent=2) + "\n")
 
-    # Figure: each feature vs oracle ef, training split only.
     fig, axes = plt.subplots(1, 4, figsize=(18, 4.2))
     for ax, f in zip(axes, ALL):
         ax.hexbin(train[f], train["oracle_ef"], yscale="log", gridsize=40,
